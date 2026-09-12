@@ -1,0 +1,2490 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Шаховий тренажер — дебюти та тактика</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<style>
+  :root{
+    --bg:#211C17;
+    --panel:#2C251E;
+    --panel-2:#342C23;
+    --line:#4A3F32;
+    --ivory:#E8DCC4;
+    --walnut:#7C5A3A;
+    --walnut-dark:#5E4128;
+    --gold:#C08A3E;
+    --gold-soft:#E0B36A;
+    --olive:#7C9A66;
+    --clay:#B0553D;
+    --text:#EDE6D8;
+    --text-muted:#A79885;
+    --font-display:'Fraunces', serif;
+    --font-body:'Inter', sans-serif;
+    --font-mono:'IBM Plex Mono', monospace;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    line-height:1.5;
+    min-height:100vh;
+  }
+  a{color:var(--gold-soft);}
+
+  .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
+
+  header.top{margin-bottom:22px;}
+  .top-row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;}
+  .theme-toggle{
+    appearance:none;
+    flex:0 0 auto;
+    width:38px;height:38px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--text);
+    font-size:1.05rem;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .theme-toggle:hover{border-color:var(--gold);}
+  .theme-toggle:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+
+  body.light-theme{
+    --bg:#F4EEE0;
+    --panel:#FFFFFF;
+    --panel-2:#F0E9D8;
+    --line:#D9CBAE;
+    --ivory:#F0E4C8;
+    --walnut:#8B6B43;
+    --walnut-dark:#6B4E2E;
+    --gold:#B8863E;
+    --gold-soft:#8A6428;
+    --olive:#5C7A46;
+    --clay:#A34A34;
+    --text:#2A2118;
+    --text-muted:#6B5C45;
+  }
+  body.light-theme .piece-w{color:#FFFFFF;text-shadow:0 0 1px #2A1C12,0 0 2px #2A1C12,0 1px 0 #2A1C12;}
+  body.light-theme .piece-b{color:#241811;text-shadow:0 0 1px #FFFFFF,0 0 2px #FFFFFF;}
+  .stats-line .streak{color:var(--clay);}
+  header.top h1{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:2rem;
+    margin:0 0 6px;
+    letter-spacing:-0.01em;
+  }
+  header.top p{
+    margin:0;
+    color:var(--text-muted);
+    font-size:0.98rem;
+    max-width:56ch;
+  }
+
+  .tabs{
+    display:flex;
+    gap:6px;
+    margin:22px 0 18px;
+    border-bottom:1px solid var(--line);
+  }
+  .tab-btn{
+    appearance:none;
+    background:transparent;
+    border:none;
+    color:var(--text-muted);
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:0.95rem;
+    padding:10px 4px;
+    margin-right:22px;
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    transition:color .15s ease, border-color .15s ease;
+  }
+  .tab-btn:hover{color:var(--text);}
+  .tab-btn.active{color:var(--gold-soft);border-bottom-color:var(--gold);}
+  .tab-btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+  .item-list-label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-dim,#8a8a99);margin:0.9rem 0 0.3rem 0.2rem;opacity:0.75;}
+  .item-list-label:first-child{margin-top:0.2rem;}
+
+  .stats-line{
+    color:var(--text-muted);
+    font-size:0.85rem;
+    margin-bottom:18px;
+  }
+  .stats-line strong{color:var(--gold-soft);font-weight:600;}
+
+  .layout{
+    display:grid;
+    grid-template-columns:250px 1fr;
+    gap:22px;
+    align-items:start;
+  }
+  @media (max-width:760px){
+    .layout{grid-template-columns:1fr;}
+    .item-list{
+      display:flex;
+      flex-direction:row;
+      overflow-x:auto;
+      gap:8px;
+      padding-bottom:6px;
+    }
+    .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
+    .item-list .item-row{flex:0 0 auto;}
+  }
+
+  .item-list{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .item-btn{
+    text-align:left;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    color:var(--text);
+    padding:10px 12px;
+    font-family:var(--font-body);
+    font-size:0.88rem;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .item-btn:hover{border-color:var(--gold);}
+  .item-btn.active{border-color:var(--gold);background:var(--panel-2);}
+  .item-btn .badge{
+    flex:0 0 auto;
+    width:16px;height:16px;
+    border-radius:50%;
+    border:1.5px solid var(--line);
+    display:flex;align-items:center;justify-content:center;
+    font-size:10px;line-height:1;color:transparent;
+  }
+  .item-btn.done .badge{
+    background:var(--olive);
+    border-color:var(--olive);
+  }
+  .item-btn.due .badge{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:#241811;
+  }
+  .item-btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+
+  .item-row{display:flex;align-items:stretch;gap:4px;}
+  .item-row .item-btn{flex:1 1 auto;min-width:0;}
+  .rep-star{
+    appearance:none;
+    flex:0 0 auto;
+    width:30px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--text-muted);
+    font-size:0.95rem;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .rep-star:hover{border-color:var(--gold);color:var(--gold-soft);}
+  .rep-star.active{color:var(--gold);border-color:var(--gold);}
+  .rep-star:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+
+  .main-panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:22px;
+  }
+  .item-header{margin-bottom:14px;}
+  .item-header .eco{
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    color:var(--gold-soft);
+    letter-spacing:0.02em;
+  }
+  .item-header h2{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:1.4rem;
+    margin:2px 0 8px;
+  }
+  .item-header p{margin:0;color:var(--text-muted);font-size:0.92rem;max-width:60ch;}
+
+  .board-area{
+    display:flex;
+    gap:22px;
+    flex-wrap:wrap;
+    margin-top:16px;
+  }
+
+  .board-col{flex:0 0 auto;}
+
+  .board{
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    width:min(420px,88vw);
+    height:min(420px,88vw);
+    border:3px solid var(--walnut-dark);
+    border-radius:4px;
+    overflow:hidden;
+    box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+  .sq{
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    user-select:none;
+  }
+  .sq.light{background:var(--ivory);}
+  .sq.dark{background:var(--walnut);}
+  .sq.selected::after{
+    content:"";
+    position:absolute;inset:0;
+    background:rgba(192,138,62,.45);
+  }
+  .sq.legal::after{
+    content:"";
+    position:absolute;
+    width:26%;height:26%;
+    border-radius:50%;
+    background:rgba(44,37,30,.35);
+  }
+  .sq.legal.has-piece::after{
+    width:100%;height:100%;
+    border-radius:0;
+    background:transparent;
+    border:4px solid rgba(44,37,30,.4);
+    box-sizing:border-box;
+  }
+  .sq.last-from, .sq.last-to{box-shadow:inset 0 0 0 3px rgba(192,138,62,.55);}
+  .sq.drag-hover::after{
+    content:"";
+    position:absolute;inset:0;
+    background:rgba(184,134,62,.28);
+  }
+  .piece{
+    font-size:min(9vw,42px);
+    line-height:1;
+    z-index:2;
+    cursor:grab;
+    touch-action:none;
+    -webkit-user-select:none;
+    user-select:none;
+  }
+  .piece.dragging-source{opacity:.3;}
+  .drag-ghost{
+    position:fixed;
+    top:0; left:0;
+    pointer-events:none;
+    z-index:1000;
+    line-height:1;
+    transform:translate(-50%,-50%);
+    will-change:transform;
+  }
+  .piece-w{color:#F7F1E3;text-shadow:0 0 1px #2A1C12,0 0 2px #2A1C12,0 1px 0 #2A1C12;}
+  .piece-b{color:#241811;text-shadow:0 0 1px #F7F1E3,0 0 2px #F7F1E3;}
+
+  .info-col{flex:1 1 220px;min-width:220px;}
+
+  .status-msg{
+    font-size:0.92rem;
+    padding:10px 12px;
+    border-radius:6px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    margin-bottom:12px;
+    min-height:20px;
+  }
+  .status-msg.ok{border-color:var(--olive);color:var(--olive);}
+  .status-msg.err{border-color:var(--clay);color:#D98A75;}
+  .status-msg.win{border-color:var(--gold);color:var(--gold-soft);}
+  .status-msg.warn{border-color:var(--gold);color:var(--text);}
+
+  .move-list{
+    font-family:var(--font-mono);
+    font-size:0.82rem;
+    color:var(--text-muted);
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:10px 12px;
+    min-height:46px;
+    margin-bottom:12px;
+    word-break:break-word;
+  }
+
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn{
+    appearance:none;
+    border:1px solid var(--line);
+    background:var(--panel-2);
+    color:var(--text);
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:0.85rem;
+    padding:8px 14px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease;
+  }
+  .btn:hover{border-color:var(--gold);color:var(--gold-soft);}
+  .btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+  .btn.primary{background:var(--gold);border-color:var(--gold);color:#241811;}
+  .btn.primary:hover{background:var(--gold-soft);color:#241811;}
+
+  .hint-text{
+    font-size:0.85rem;
+    color:var(--text-muted);
+    margin-top:8px;
+    font-style:italic;
+  }
+
+  .explain{
+    font-size:0.9rem;
+    color:var(--text);
+    background:var(--panel-2);
+    border-left:3px solid var(--gold);
+    padding:10px 12px;
+    border-radius:0 6px 6px 0;
+    margin-top:12px;
+  }
+
+  .move-comment{
+    font-size:0.85rem;
+    color:var(--text);
+    background:var(--panel-2);
+    border-left:3px solid var(--olive);
+    padding:8px 12px;
+    border-radius:0 6px 6px 0;
+    margin-top:10px;
+  }
+
+  .theory{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
+  .theory h3{
+    font-family:var(--font-display);
+    font-weight:600;
+    font-size:1.02rem;
+    margin:0 0 6px;
+    color:var(--gold-soft);
+  }
+  .theory .idea{font-size:0.9rem;color:var(--text);margin:0 0 12px;max-width:70ch;}
+  .plans-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin-bottom:14px;
+  }
+  @media (max-width:560px){.plans-grid{grid-template-columns:1fr;}}
+  .plans-col h4{
+    font-size:0.78rem;
+    text-transform:none;
+    color:var(--text-muted);
+    margin:0 0 6px;
+    font-weight:600;
+  }
+  .plans-col ul{margin:0;padding-left:18px;font-size:0.86rem;color:var(--text);}
+  .plans-col li{margin-bottom:4px;}
+  .trap-box{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+  }
+  .trap-box .trap-name{
+    font-weight:600;
+    font-size:0.9rem;
+    color:var(--clay);
+    margin-bottom:4px;
+  }
+  .trap-box p{font-size:0.85rem;color:var(--text-muted);margin:0 0 10px;}
+
+  .variations-box{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+    margin-top:12px;
+  }
+  .variations-box h4{margin:0 0 8px;font-size:0.9rem;color:var(--olive);}
+  .variation-item{margin-bottom:12px;}
+  .variation-item:last-child{margin-bottom:0;}
+  .variation-item .variation-name{
+    font-weight:600;
+    font-size:0.87rem;
+    color:var(--gold-soft);
+    margin-bottom:2px;
+  }
+  .variation-item p{font-size:0.85rem;color:var(--text-muted);margin:0 0 8px;}
+  #returnTrainBtn{margin-top:12px;}
+  #freePlayBox{margin:4px 0 12px;}
+  #freePlayBox .btn{width:100%;}
+  .engine-thinking{opacity:.7;font-style:italic;}
+
+  /* ---- Рівні складності задач ---- */
+  .diff-filter{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;}
+  .diff-btn{
+    appearance:none;
+    background:var(--panel);
+    border:1px solid var(--line);
+    color:var(--text-muted);
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:0.76rem;
+    padding:5px 11px;
+    border-radius:999px;
+    cursor:pointer;
+    transition:border-color .15s ease, color .15s ease, background .15s ease;
+  }
+  .diff-btn:hover{color:var(--text);border-color:var(--gold);}
+  .diff-btn.active{border-color:var(--gold);color:var(--gold-soft);background:var(--panel-2);}
+  .diff-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px;flex:0 0 auto;}
+  .diff-dot.easy{background:var(--olive);}
+  .diff-dot.medium{background:var(--gold);}
+  .diff-dot.hard{background:var(--clay);}
+  .item-btn .item-label{display:flex;align-items:center;min-width:0;}
+  .item-btn .item-label span.txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .item-label-text{display:flex;flex-direction:column;min-width:0;}
+  .item-due-note{
+    font-size:0.68rem;
+    color:var(--text-muted);
+    opacity:0.85;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .item-btn.due .item-due-note{color:var(--gold-soft);opacity:1;}
+
+  /* ---- CCT-тренажер (шахи/взяття/загрози) ---- */
+  .cct-box{
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+    margin-top:14px;
+  }
+  .cct-box h4{margin:0 0 10px;font-size:0.9rem;color:var(--olive);}
+  .cct-step{margin-bottom:8px;}
+  .cct-step:last-child{margin-bottom:0;}
+  .cct-step-btn{width:100%;text-align:left;}
+  .cct-answer{
+    font-size:0.85rem;
+    color:var(--text);
+    margin-top:6px;
+    padding:8px 10px;
+    background:var(--panel);
+    border-left:3px solid var(--gold);
+    border-radius:0 6px 6px 0;
+    display:none;
+  }
+  .cct-answer.shown{display:block;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="top-row">
+      <div>
+        <h1>Шаховий тренажер</h1>
+        <p>Відпрацьовуй дебютні лінії та тактичні удари прямо в браузері — без реєстрації, прогрес зберігається локально.</p>
+      </div>
+      <button class="theme-toggle" id="themeToggle" aria-label="Перемкнути тему" title="Перемкнути тему">🌙</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="openings">Дебюти</button>
+    <button class="tab-btn" data-tab="tactics">Тактика</button>
+    <button class="tab-btn" data-tab="cct">Зівки (CCT)</button>
+    <button class="tab-btn" data-tab="endgames">Ендшпілі</button>
+  </nav>
+
+  <div class="stats-line" id="statsLine"></div>
+
+  <div class="layout">
+    <div class="item-list" id="itemList"></div>
+
+    <div class="main-panel">
+      <div class="item-header" id="itemHeader"></div>
+
+      <div class="board-area">
+        <div class="board-col">
+          <div class="board" id="board"></div>
+        </div>
+        <div class="info-col">
+          <div class="status-msg" id="statusMsg">Обери пункт зі списку зліва.</div>
+          <div class="move-list" id="moveList"></div>
+          <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
+          <div id="freePlayBox" style="display:none;">
+            <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
+          </div>
+          <div id="analysisBtnBox" style="display:none;margin:4px 0 12px;">
+            <button class="btn" id="analysisBtn" style="width:100%;">📊 Показати аналіз ходів</button>
+          </div>
+          <div class="btn-row">
+            <button class="btn" id="resetBtn">Почати заново</button>
+            <button class="btn" id="undoBtn">Скасувати хід</button>
+            <button class="btn" id="hintBtn">Підказка</button>
+            <button class="btn primary" id="nextBtn">Далі →</button>
+          </div>
+          <div id="hintBox" class="hint-text" style="display:none;"></div>
+          <div id="explainBox" class="explain" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===================== ДАНІ ===================== */
+
+const OPENINGS = [
+  {id:"italian", name:"Італійська партія", eco:"C50", side:"white", coreMoves:6,
+   moves:["e4","e5","Nf3","Nc6","Bc4","Bc5","c3","Nf6","d3","d6","O-O","O-O"], moveComments:["Захоплюємо центр і відкриваємо дорогу слону та ферзю.","Чорні відповідають симетрично, борючись за центр.","Розвиваємо коня з нападом на пішака e5.","Чорні захищають пішака e5, розвиваючи фігуру.","Слон одразу цілиться в найслабший пункт чорних — f7.","Джуоко Піано: чорні відповідають дзеркально, розвиваючи слона назустріч.","Готуємо d4, забезпечуючи слону в разі потреби відступ на b3 чи c2.","Чорні розвивають коня, борючись за центр і атакуючи e4.","Джуоко Пianissimo: білі не поспішають з d4, спершу завершуючи розвиток.","Чорні дзеркалять і собі готують рокіровку.","Ховаємо короля в безпеку, готуючись до маневрів у центрі.","Чорні також рокіруються — типова спокійна італійська з обопільними шансами."],
+   description:"Класичний розвиваючий дебют — слон одразу цілиться у слабкий пункт f7.",
+   theory:{
+     idea:"Швидкий розвиток фігур із негайним тиском на слабкий пункт f7, який до рокіровки захищає лише король.",
+     plansWhite:["Рокіруватися і зіграти c3 та d4, захопивши центр","Тримати слона на c4, спрямованого на f7","У гострих лініях шукати випад конем на g5, атакуючи f7"],
+     plansBlack:["Вивести коня на f6, атакуючи пішака e4","Розвинути слона на c5 або e7 і рокіруватися","Підготувати d5, борючись за центр"],
+     trap:{name:"Мат Легаля",
+       moves:["e4","e5","Nf3","Nc6","Bc4","d6","Nc3","Bg4","Nxe5","Bxd1","Bxf7+","Ke7","Nd5#"],
+       note:"Чорні зв'язують коня ходом Bg4, і якщо після Nxe5 вони жадібно б'ють ферзя (Bxd1), білі ставлять мат за два ходи: Bxf7+ Ke7 Nd5#. Правильна відповідь на Nxe5 — просто Nxe5, залишаючи чорних з зайвою фігурою."},
+     variations:[
+       {name:"Захист двох коней",moves:["e4","e5","Nf3","Nc6","Bc4","Nf6"],note:"Замість спокійного розвитку чорні одразу контратакують пішака e4 — виникає гострий захист двох коней замість спокійної італійської."},
+       {name:"Джуоко Піано (симетрична відповідь)",moves:["e4","e5","Nf3","Nc6","Bc4","Bc5"],note:"Найсиметричніша відповідь: чорні розвивають слона назустріч, і партія залишається в межах класичної італійської партії."}
+     ]
+   }},
+  {id:"ruylopez", name:"Іспанська партія", eco:"C60", side:"white", coreMoves:6,
+   moves:["e4","e5","Nf3","Nc6","Bb5","a6","Ba4","Nf6","O-O","Be7","Re1","b5"], moveComments:["Захоплюємо центр, відкриваючи лінії для слона й ферзя.","Чорні відповідають дзеркально, не поступаючись центром.","Атакуємо пішака e5 і розвиваємо фігуру.","Єдиний природний захист пішака e5.","Слон нападає на коня c6 — єдиного захисника пішака e5.","Захист Морфі: чорні одразу запитують слона, куди він піде.","Слон відступає, зберігаючи зв'язку і тиск на коня c6.","Чорні розвивають коня, атакуючи пішака e4.","Рокіруємось, ховаючи короля перед боротьбою за центр.","Чорні завершують розвиток слона, готуючись рокіруватися.","Тура стає на відкриту лінію, підтримуючи майбутнє e5.","Чорні відганяють слона й захоплюють простір на фланзі — типова іспанська структура."],
+   description:"Найпринциповіший з відкритих дебютів — слон тисне на коня, що захищає пішака e5.",
+   theory:{
+     idea:"Слон атакує коня c6 — єдиного захисника пішака e5 — створюючи довгостроковий тиск ще до того, як хтось узяв хоч одну фігуру.",
+     plansWhite:["Рокіруватися, зіграти c3 і d4, захопивши центр","Відступити слоном на b3, зберігаючи тиск по діагоналі a2–g8","У закритих лініях готувати атаку на королівському фланзі"],
+     plansBlack:["Захистити коня ходом a6, відганяючи слона","Розвинути коня на f6, атакуючи пішака e4 (Берлінський захист)","Підготувати d5 або b5, борючись за центр і фланг"],
+     trap:{name:"Пастка Ноєвого ковчега",
+       moves:["e4","e5","Nf3","Nc6","Bb5","a6","Ba4","d6","d4","b5","Bb3","Nxd4","Nxd4","exd4","Qxd4","c5","Qd5","Be6","Qc6+","Bd7","Qd5","c4"],
+       note:"Білі беруть на d4 ферзем занадто рано (замість обережного c3). Пішаки чорних a6-b5-c4 назавжди замуровують слона на b3 — матеріальна перевага чорних неминуча."},
+     variations:[
+       {name:"Берлінський захист",moves:["e4","e5","Nf3","Nc6","Bb5","Nf6"],note:"Чорні одразу нападають конем на пішак e4, змушуючи білих визначитися з відповіддю ще до звичного a6."},
+       {name:"Захист Морфі (a6)",moves:["e4","e5","Nf3","Nc6","Bb5","a6"],note:"Найпопулярніша сучасна відповідь: чорні одразу запитують слона, куди він піде — на a4 чи розмін на c6."}
+     ]
+   }},
+  {id:"opensicilian", name:"Сицилійський захист (відкритий)", eco:"B90", side:"white", coreMoves:6,
+   moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","a6","Bg5","e6"], moveComments:["Захоплюємо центр і відкриваємо гру.","Чорні уникають симетрії, борючись за центр із флангу.","Готуємо d4, розвиваючи фігуру заздалегідь.","Чорні готують ...Nf6, не боячись e5 з темпом.","Розкриваємо центр — типовий сицилійський прорив.","Чорні змушені взяти, інакше залишаться зі стисненою грою.","Кінь централізується, контролюючи ключові поля.","Чорні розвивають коня, нападаючи на пішака e4.","Захищаємо e4 і завершуємо розвиток легких фігур.","Варіант Найдорфа: чорні готують b5, не пускаючи білі фігури на b5 і c4.","Головний хід теорії: слон зв'язує коня f6, посилюючи тиск на центр.","Чорні готують розвиток слона f8, зберігаючи гнучкість щодо структури."],
+   description:"Найпопулярніший захист проти 1.e4: білі отримують перевагу в центрі, чорні — контргру на фланзі.",
+   theory:{
+     idea:"Чорні свідомо порушують симетрію: замість боротьби за центр вони отримують напіввідкриту лінію «c» та контргру на ферзевому фланзі в обмін на просторову перевагу білих.",
+     plansWhite:["Розвинути фігури (Be2 або Bc4) і рокіруватися","Атакувати на королівському фланзі пішаками f-g-h","Тримати коня на d4, контролюючи центр"],
+     plansBlack:["Зіграти a6 і підготувати b5 (варіант Найдорфа)","Розвинути слона на g7 у варіанті дракона","Використати напіввідкриту лінію «c» для тиску на ферзевому фланзі"],
+     trap:{name:"Сибірська пастка (у гамбітних лініях)",
+       moves:["e4","c5","d4","cxd4","c3","dxc3","Nxc3","Nc6","Nf3","e6","Bc4","Qc7","O-O","Nf6","Qe2","Ng4","h3","Nd4"],
+       note:"Це трапляється в гамбіті Сміта-Морра, іншій гілці сицилійського. Після необережного h3?? кінь іде на d4! з погрозою Nxf3+ і матом ферзем на h2 — білі втрачають фігуру або й більше. Обережний хід тут — Nb5."},
+     variations:[
+       {name:"Класична система (Nc6)",moves:["e4","c5","Nf3","Nc6"],note:"Замість систем Найдорфа чи Дракона чорні розвивають коня одразу, залишаючи вибір структури на потім."},
+       {name:"Схема Тайманова/Кана (e6)",moves:["e4","c5","Nf3","e6"],note:"Чорні обирають гнучкі побудови, відкладаючи розвиток коня b8 і зберігаючи різні порядки ходів."}
+     ]
+   }},
+  {id:"french", name:"Французький захист", eco:"C00", side:"black", coreMoves:6,
+   moves:["e4","e6","d4","d5","e5","c5","c3","Nc6","Nf3","Qb6","Be2","Nh6"], moveComments:["Захоплюємо центр.","Чорні готують d5, залишаючи слону c8 менше простору.","Розширюємо центр, поки є нагода.","Чорні одразу б'ють по центру білих.","Варіант просування: білі захоплюють простір, зберігаючи пішаковий ланцюг.","Чорні одразу атакують основу пішакового ланцюга d4-e5.","Зміцнюємо пункт d4 додатковим захисником.","Чорні розвивають коня, посилюючи тиск на d4.","Розвиваємо коня, захищаючи d4 ще раз.","Чорні тиснуть на d4 і b2, використовуючи незручне розташування фігур білих.","Обережний хід: саме тут природне Bd3 програє фігуру (див. пастку), а Be2 надійно захищає позицію.","Чорні готують Nf5, тиснучи на пункт d4 ще одною фігурою."],
+   description:"Чорні одразу б'ють по центру ходом d5, будуючи міцну, хоч і дещо затиснуту структуру.",
+   theory:{
+     idea:"Чорні віддають частину простору за міцну пішакову структуру, а потім атакують центр білих ударом c5 біля його основи. Головна стратегічна проблема чорних — слон c8, замкнений власним пішаком e6; білі натомість повинні знайти застосування просторовій перевазі, поки чорні не розкрились.",
+     plansWhite:["Захопити простір ходом e5 (варіант Advance) і грати проти слона c8","Розвинути фігури (Nd2 або Nc3) і рокіруватися на королівський фланг","Використати просторову перевагу для атаки на короля","У варіанті обміну (3.exd5 exd5) шукати мінімальний плюс у симетричній структурі"],
+     plansBlack:["Зіграти c5, атакуючи основу пішакового ланцюга d4-e5","Розв'язати проблему білопільного слона c8 — вивести його до ходу e6 або розміняти через Fort Knox (Bd7-c6)","Підготувати f6, підриваючи центр білих","У Вінавері (3.Nc3 Bb4) зв'язати коня c3 і забрати слона на c3, псуючи пішакову структуру білих"],
+     trap:{name:"Пастка у варіанті Просування (Bd3??)",
+       moves:["e4","e6","d4","d5","e5","c5","c3","Nc6","Nf3","Qb6","Bd3","cxd4","cxd4","Nxd4","Nxd4","Qxd4"],
+       note:"Після 5...Qb6 пішак d4 захищають лише пішак c3 і кінь f3. Природний з вигляду хід 6.Bd3?? залишає d4 недостатньо захищеним: 6...cxd4 7.cxd4 Nxd4! 8.Nxd4 Qxd4, і чорний ферзь одночасно нападає на слона d3 і пішака b2 — чорні виграють щонайменше фігуру. Правильно тут 6.Be2 або 6.a3, зберігаючи пункт d4."},
+     variations:[
+       {name:"Розмінний варіант",moves:["e4","e6","d4","d5","exd5"],note:"Білі спрощують структуру, прагнучи мінімальної, але стабільної переваги в симетричній позиції."},
+       {name:"Варіант просування",moves:["e4","e6","d4","d5","e5"],note:"Білі захоплюють простір і одразу дають чорним мішень для гри проти слона c8."}
+     ]
+   }},
+  {id:"carokann", name:"Захист Каро-Канн", eco:"B10", side:"black", coreMoves:6,
+   moves:["e4","c6","d4","d5","Nc3","dxe4","Nxe4","Bf5","Ng3","Bg6","h4","h6"], moveComments:["Захоплюємо центр.","Чорні готують d5, не замикаючи слона c8.","Розширюємо центр.","Чорні атакують пішака e4, борючись за центр.","Розвиваємо коня, пропонуючи чорним визначитися з центром.","Класичний варіант: чорні розмінюють пішака в центрі.","Кінь відбиває пішака, займаючи активну позицію в центрі.","Чорні виводять слона до ходу e6, уникаючи проблем французького захисту.","Відганяємо слона, готуючи згодом штурм пішаком h4-h5.","Слон відступає на g6, зберігаючи контроль над важливою діагоналлю.","Починаємо пішаковий штурм на королівському фланзі, атакуючи слона.","Чорні зупиняють пішака, зберігаючи слона на активній позиції."],
+   description:"Надійний захист: чорні готують d5, не замикаючи власного чорнопольного слона.",
+   theory:{
+     idea:"Як і у французькому, чорні б'ють по центру ходом d5, але заздалегідь звільняють шлях слону c8 на f5 чи g4, уникаючи головної проблеми французького захисту. Класичний варіант (3...dxe4 4.Nxe4 Bf5) — вибір Капабланки й Карпова, варіант просування (3.e5) веде до закритих, маневрених позицій.",
+     plansWhite:["Захопити простір ходом e5 або спростити гру розміном exd5","Розвинути фігури і шукати шанси на королівському фланзі","У розмінному варіанті грати на невеликий, але стійкий позиційний плюс","У варіанті просування атакувати слона на f5 ходом Nf3-h4 чи g4"],
+     plansBlack:["Вивести слона на f5 чи g4 до ходу e6","Зіграти c5, борючись за центр","Розвинути коней на d7 і f6, готуючи рокіровку","У варіанті просування тиснути на пункт d4 фігурами і не поспішати з f6"],
+     trap:{name:"Задушений мат (варіант Карпова)",
+       moves:["e4","c6","d4","d5","Nc3","dxe4","Nxe4","Nd7","Qe2","Ngf6","Nd6#"],
+       note:"Після 4...Nd7 (варіант Карпова) хід 5.Qe2! приховує загрозу Nd6# — задушеного мата: король застряг у кутку між власними фігурами, і конем нема куди тікати. Якщо чорні автоматично розвивають другого коня ходом 5...Ngf6??, мат неминучий. Правильно тут зіграти щось інше, наприклад 5...e6 чи 5...Qc7, прибираючи поле d6 з-під удару, перш ніж виводити коня на f6."},
+     variations:[
+       {name:"Варіант просування",moves:["e4","c6","d4","d5","e5"],note:"Веде до закритої, маневреної гри, де білі грають на просторову перевагу на королівському фланзі."},
+       {name:"Розмінний варіант",moves:["e4","c6","d4","d5","exd5"],note:"Спрощує позицію: обидві сторони розвиваються симетрично, і партія часто зводиться до тонкої боротьби за невеликий плюс."}
+     ]
+   }},
+  {id:"qgd", name:"Ферзевий гамбіт", eco:"D06", side:"white", coreMoves:4,
+   moves:["d4","d5","c4","e6","Nc3","Nf6","Bg5","Be7","e3","O-O","Nf3","Nbd7"], moveComments:["Захоплюємо центр ферзевим пішаком.","Чорні відповідають симетрично.","Пропонуємо пішак, щоб відволікти d5 і отримати широкий центр.","Відхилений ферзевий гамбіт: чорні зміцнюють центр, тимчасово замикаючи слона c8.","Розвиваємо коня, посилюючи тиск на d5.","Чорні розвивають коня, готуючись до рокіровки.","Класичний хід: зв'язуємо коня f6, тиснучи на центр.","Чорні розвивають слона, готуючись розв'язати коня.","Готуємо розвиток слона f1, зберігаючи міцну структуру в центрі.","Чорні ховають короля, завершуючи підготовку до боротьби за центр.","Завершуємо розвиток легких фігур перед боротьбою за центр.","Чорні готують c5 або e5, борючись за центр після завершення розвитку."],
+   description:"Білі жертвують пішака c4, щоб отримати міцний контроль над центром.",
+   theory:{
+     idea:"Білі пропонують пішак c4, відволікаючи пішака d5 і претендуючи на широкий центр незалежно від того, чи чорні приймуть гамбіт.",
+     plansWhite:["Розвинути коней і слонів, підготувати рокіровку","Тиснути фігурами на пункт d5","Якщо чорні взяли dxc4 — швидко повернути пішака й отримати перевагу в розвитку"],
+     plansBlack:["Відхилити гамбіт ходом e6 або c6, зміцнюючи центр","Вивести слона c8 до ходу e6, інакше він застрягне за пішаками","У гострих лініях узяти dxc4 і утримати або вигідно повернути пішака"],
+     trap:{name:"Пастка \"Слон\" (Elephant Trap)",
+       moves:["d4","d5","c4","e6","Nc3","Nf6","Bg5","Nbd7","cxd5","exd5","Nxd5","Nxd5","Bxd8","Bb4+","Qd2","Bxd2+","Kxd2","Kxd8"],
+       note:"Білі спокушаються виграти пішак на d5 конем, забувши, що кінь f6 лише здається зв'язаним. Після Nxd5! Bxd8 Bb4+ чорні відіграють ферзя і залишаються з зайвою фігурою."},
+     variations:[
+       {name:"Прийнятий ферзевий гамбіт",moves:["d4","d5","c4","dxc4"],note:"Чорні тимчасово беруть пішака, знаючи, що білі легко його повернуть, натомість отримуючи перевагу в розвитку."},
+       {name:"Відхилений (e6)",moves:["d4","d5","c4","e6"],note:"Найпоширеніша відповідь: чорні зміцнюють центр, тимчасово замикаючи слона c8 заради міцної структури."}
+     ]
+   }},
+  {id:"slav", name:"Слов'янський захист", eco:"D10", side:"black", coreMoves:4,
+   moves:["d4","d5","c4","c6","Nf3","Nf6","Nc3","dxc4","a4","Bf5","e3","e6"], moveComments:["Захоплюємо центр.","Чорні відповідають симетрично.","Пропонуємо пішак, тиснучи на d5.","Чорні захищають d5, не замикаючи слона c8.","Найгнучкіший розвиваючий хід: білі відкладають рішення щодо центру.","Чорні розвивають коня, продовжуючи класичний розвиток.","Розвиваємо другого коня, готуючи тиск на центр.","Чорні забирають пішака c4, плануючи утримати його ходом b5.","Забороняємо чорним зіграти b5, стримуючи розширення на фланзі.","Чорні виводять слона на активну позицію до ходу e6.","Готуємо розвиток слона f1, забираючи пішака c4 назад у слушний момент.","Чорні завершують пішакову структуру, відкриваючи слона f8."],
+   description:"Чорні захищають пішака d5 пішаком c6, залишаючи слону c8 шлях на f5.",
+   theory:{
+     idea:"На відміну від ортодоксального ферзевого гамбіту, пішак c6 захищає d5, не замикаючи білопільного слона — головна перевага слов'янської структури. Дебют цінували майже всі чемпіони світу за надійність: чорні отримують міцну структуру, зберігаючи активність легких фігур.",
+     plansWhite:["Розвинути коня на f3 і слона, тиснучи на центр","Розглянути розмін cxd5, граючи проти пішакової структури чорних","У гострих лініях (гамбіт слов'янського, 4...dxc4) жертвувати пішак за розвиток","У напівслов'янських структурах (з e6) готувати e4 за підтримки фігур"],
+     plansBlack:["Вивести слона на f5 чи g4 до ходу e6","Утримувати центр і зіграти dxc4 у слушний момент, утримуючи пішака ходом b5","Розвинути коня на f6 і рокіруватися","У напівслов'янському варіанті (з e6) готувати підрив b5 і контроль над e4"],
+     trap:{name:"Пастка після 4.Nbd2 (Bg6?!/Qb6?!)",
+       moves:["d4","d5","c4","c6","Nf3","Nf6","Nbd2","Bf5","Nh4","Bg6","Qb3","Qb6","Qh3","a6","Nxg6","hxg6","Qc8+"],
+       note:"Тихий хід 4.Nbd2 виглядає нешкідливо, але після 4...Bf5 5.Nh4 хід 5...Bg6?! — типова неточність (правильно 5...Be4!, зберігаючи активного слона). Ще гірше 6...Qb6?!, і йде 7.Qh3! — ферзь заходить на діагональ h3-c8 і готує Nxg6. Після 7...a6 8.Nxg6! hxg6 9.Qc8+! чорна тура на a8 опиняється фактично в пастці: єдиний захист — незграбне 9...Qd8, перекриваючи шах власним ферзем. Ціною розміну слона на коня і зіпсованих пішаків королівського флангу білі отримують двох слонів і набагато приємнішу позицію."},
+     variations:[
+       {name:"Розмінний варіант",moves:["d4","d5","c4","c6","cxd5"],note:"Білі спрощують гру, знімаючи напругу з центру ще до розвитку фігур."},
+       {name:"Головна система (Nf3)",moves:["d4","d5","c4","c6","Nf3"],note:"Найгнучкіший розвиваючий хід: білі відкладають рішення щодо центру, готуючи Nc3 та e3 чи Bg5."}
+     ]
+   }},
+  {id:"english", name:"Англійський дебют", eco:"A20", side:"white", coreMoves:4,
+   moves:["c4","e5","Nc3","Nf6","Nf3","Nc6","g3","d5","cxd5","Nxd5","Bg2","Nb6"], moveComments:["Гнучкий фланговий хід, що відкладає рішення про центр.","Чорні одразу займають центр, поки білі цього не зробили.","Розвиваємо коня, продовжуючи гнучку схему розвитку.","Чорні розвивають коня, опосередковано тиснучи на пішака c4.","Продовжуємо розвиток, готуючи фланкетто.","Чорні розвивають другого коня — типова структура «перевернутої сицилійської».","Готуємо фланкетто слона на велику діагональ.","Чорні захоплюють центр, поки є нагода.","Розмінюємо пішаків, відкриваючи лінії.","Кінь чорних централізується, відбиваючи пішака.","Слон стає на найкращу діагональ, тиснучи на центр.","Чорні відводять коня від можливого нападу, зберігаючи гнучкість."],
+   description:"Гнучкий фланговий дебют, що часто перетворюється на \"перевернуту\" сицилійську.",
+   theory:{
+     idea:"Білі відкладають рішення про центральні пішаки, розвиваючись гнучко — часто гра трансформується у структури сицилійського захисту, але з зайвим темпом, оскільки саме білі обирають, коли (і чи) грати d4.",
+     plansWhite:["Розвинути коня на c3, підготувати фланкетто через g3 і Bg2","Зберігати гнучкість щодо ходу d4, обираючи момент за структурою чорних","Обмежувати чорні фігури контролем над пунктом d5","У симетричних лініях (1...c5) грати на переважний темп у сицилійських структурах"],
+     plansBlack:["Відповісти симетрично (1...c5) або захопити центр ходом d5","Розвиватися класично, як у сицилійському захисті з переставленими кольорами","Стежити за слабкістю пунктів d3 чи d6 у фланкетто-структурах","У варіанті \"їжака\" (з b6, d6) стримувати центр білих і чекати моменту для d5 чи b5"],
+     trap:{name:"Гонка перетворення у варіанті Флора–Мікенаса",
+       moves:["c4","Nf6","Nc3","e6","e4","d5","e5","d4","exf6","dxc3","fxg7","cxb2","gxh8=Q","bxa1=Q"],
+       note:"У гострому варіанті Флора–Мікенаса (3.e4) обидві сторони одночасно проривають пішаками до останньої горизонталі: 5...d4! 6.exf6 dxc3 7.fxg7 cxb2 8.gxh8=Q bxa1=Q — і на дошці одразу два нових ферзі. Це один із найвідоміших прикладів того, наскільки гострою може стати нібито спокійна англійська, якщо обидві сторони йдуть уперед не озираючись; така позиція вимагає точного розрахунку, а не автоматичної гри."},
+     variations:[
+       {name:"Симетрична англійська",moves:["c4","c5"],note:"Чорні дзеркалять хід білих, і боротьба часто зводиться до того, хто краще використає зайвий темп."},
+       {name:"Гнучка відповідь (Nf6)",moves:["c4","Nf6"],note:"Залишає відкритими різні структури — від голландської до староіндійської з переставленими кольорами."}
+     ]
+   }},
+  {id:"kid", name:"Староіндійський захист", eco:"E60", side:"black", coreMoves:4,
+   moves:["d4","Nf6","c4","g6","Nc3","Bg7","e4","d6","Nf3","O-O","Be2","e5"], moveComments:["Захоплюємо центр.","Чорні тиснуть на e4, поки не віддаючи центр.","Розширюємо контроль над центром.","Чорні готують фланкетто, тиснучи на центр здалеку.","Розвиваємо коня, готуючи e4.","Слон стає на найкращу діагональ, дивлячись у центр.","Білі займають весь центр — саме це й провокували чорні.","Чорні завершують підготовку до підриву e5 або c5.","Розвиваємо коня, готуючи рокіровку.","Чорні ховають короля, завершуючи підготовку до підриву центру.","Скромний, але міцний розвиваючий хід, що готує O-O.","Класичний підрив центру: чорні нарешті б'ють по пішаковому ланцюгу білих."],
+   description:"Чорні свідомо віддають центр білим, щоб згодом атакувати його фігурами та пішаками.",
+   theory:{
+     idea:"Чорні дозволяють білим зайняти центр пішаками c4-d4-e4, щоб потім вдарити по ньому фігурами (Nf6, Bg7) і пішаками (e5 або c5) — типовий гіпермодерний підхід: спершу контроль здалеку, потім підрив.",
+     plansWhite:["Захопити центр ходами c4, d4, e4","Розвинути фігури і грати на просторову перевагу ферзевого флангу","Атакувати в центрі чи на ферзевому фланзі, поки чорні готують контратаку","У класичному варіанті (з Nf3, Be2) грати на замкнення центру ходом d5 і атаку на ферзевому фланзі через c5-c6"],
+     plansBlack:["Зіграти e5 або c5, підриваючи центр білих","Атакувати на королівському фланзі пішаками f5-g5-h5 після рокіровки, особливо якщо центр замкнено","Тримати слона на g7, спрямованого на довгу діагональ","Після замкнення центру (d5) готувати класичний штурм f5-f4, ігноруючи події на іншому фланзі"],
+     trap:{name:"Пастка на g5?? (слон на g5-h4)",
+       moves:["d4","Nf6","c4","g6","Nc3","Bg7","e4","d6","Nf3","O-O","Bg5","h6","Bh4","g5","Nxg5","hxg5","Bxg5"],
+       note:"Після Bg5-h4 хід 8...g5?? виглядає активним (атакує слона), але руйнує захист власного короля і не помічає тактики: 9.Nxg5! hxg5 10.Bxg5, і кінь f6 виявляється зв'язаним по діагоналі до ферзя d8 — наступним ходом білі забирають і його. Правильно тут просто розвиватися далі, не чіпаючи слона до слушного моменту."},
+     variations:[
+       {name:"Фланкеттова система",moves:["d4","Nf6","c4","g6","g3"],note:"Білі також розвивають слона на велику діагональ, борючись за контроль над d5 і e4 без гострих ускладнень."},
+       {name:"Система Земіша (f3)",moves:["d4","Nf6","c4","g6","Nc3","Bg7","f3"],note:"Білі зміцнюють центр пішаком f3, готуючись до довгої рокіровки й атаки пішаками g4-h4."}
+     ]
+   }},
+  {id:"nimzo", name:"Захист Німцовича", eco:"E20", side:"black", coreMoves:6,
+   moves:["d4","Nf6","c4","e6","Nc3","Bb4","e3","O-O","Bd3","d5","Nf3","c5"], moveComments:["Захоплюємо центр.","Чорні тиснуть на e4.","Розширюємо контроль над центром.","Чорні готують розвиток слона f8 і рокіровку.","Розвиваємо коня, готуючи e4.","Чорні одразу зв'язують коня, борючись за e4 без ходу d5.","Варіант Рубінштейна: білі спокійно готують розвиток слона f1.","Чорні ховають короля, готуючись до боротьби за центр.","Слон виходить на активну діагональ, готуючи можливе e4.","Чорні борються за центр, оскаржуючи пункт e4 ще й пішаком.","Розвиваємо другого коня, завершуючи підготовку до рокіровки.","Чорні тиснуть на центр і з іншого флангу, готуючи розмін на c3 чи d4."],
+   description:"Чорні одразу зв'язують коня c3, борючись за пункт e4 без ходу d5.",
+   theory:{
+     idea:"Чорні одразу зв'язують коня c3, борючись за центральний пункт e4 без ходу d5, і за потреби готові віддати слона за коня заради здвоєних пішаків суперника — дебют цінують за поєднання позиційного контролю і гнучкості, ще з часів Німцовича та Ботвинника.",
+     plansWhite:["Зіграти a3, змушуючи чорних одразу визначитися зі слоном (варіант Земіша)","Отримати перевагу двох слонів після розміну на c3","Використати пішакову більшість у центрі","У варіанті Рубінштейна (Nge2 або Bd3) уникнути здвоєних пішаків і грати на плавний розвиток"],
+     plansBlack:["Тиснути на здвоєні пішаки c3/c4 після розміну Bxc3","Розвинути фігури та зіграти d5 чи c5, підриваючи центр","У деяких лініях свідомо віддати слона за коня заради довгострокової структурної переваги","Тримати короля в центрі трохи довше, граючи на блокаду здвоєних пішаків фігурами, а не поспішати з рокіровкою"],
+     trap:{name:"Чому bxc3 частіше за Qxc3",
+       moves:["d4","Nf6","c4","e6","Nc3","Bb4","Qc2","O-O","a3","Bxc3+","Qxc3","Ne4"],
+       note:"Природне на вигляд 6.Qxc3 дозволяє чорним відразу отримати темп: 6...Ne4! нападає на ферзя і змушує його повернутися (7.Qc2), а кінь тим часом чудово централізований. Саме тому в цій позиції частіше рекомендують 6.bxc3 — так білі одразу отримують двох слонів і міцний центр, не витрачаючи темп на відступ ферзем."},
+     variations:[
+       {name:"Уникаючи Німцовича (Nf3)",moves:["d4","Nf6","c4","e6","Nf3"],note:"Білі спершу розвивають коня на f3, залишаючи можливість перейти до новоіндійського чи інших систем."},
+       {name:"Каталонська схема (g3)",moves:["d4","Nf6","c4","e6","g3"],note:"Гнучка побудова з фланкетто: білі готують каталонську структуру, тиснучи на діагональ a1-h8."}
+     ]
+   }},
+  {id:"scandinavian", name:"Скандинавський захист", eco:"B01", side:"black", coreMoves:4,
+   moves:["e4","d5","exd5","Qxd5","Nc3","Qa5","d4","Nf6","Nf3","c6","Bc4","Bf5"], moveComments:["Захоплюємо центр.","Чорні одразу кидають виклик пішаку e4.","Білі беруть пішака — найпринциповіша відповідь.","Чорні відразу відіграють пішака ферзем.","Розвиваємо коня з темпом, атакуючи ферзя.","Ферзь відступає на активне поле, зберігаючи зв'язку по діагоналі.","Захоплюємо центр другим пішаком, випереджаючи чорних у розвитку.","Чорні розвивають коня, надолужуючи втрачені темпи.","Розвиваємо коня, продовжуючи випередження в розвитку.","Чорні готують надійне поле для ферзя і контролюють d5.","Розвиваємо слона на активну діагональ до f7.","Чорні виводять слона до ходу e6, за зразком Каро-Канна."],
+   description:"Чорні одразу відкривають лінію в центрі й забирають пішака ферзем — найпряміша відповідь на 1.e4.",
+   theory:{
+     idea:"Чорні негайно розкривають центр і відіграють пішака ферзем, погоджуючись віддати темп на його відступ в обмін на просту, зрозумілу гру без глибокої теорії дебюту.",
+     plansWhite:["Розвинути фігури з темпом, атакуючи ферзя (Nc3, Nf3, Bc4)","Зайняти центр ходом d4 і забезпечити перевагу в розвитку","Рокіруватися і використати випередження в розвитку для швидкої атаки"],
+     plansBlack:["Відступити ферзем на a5, d6 або d8, обираючи найменш вразливе поле","Швидко розвинути фігури (Nf6, Bg4/Bf5, e6), надолужуючи втрачені темпи","Зіграти c6, забезпечуючи ферзю надійне поле відступу і контроль над d5"],
+     trap:{name:"Пастка Леонгардта",
+       moves:["e4","d5","exd5","Qxd5","Nc3","Qa5","b4","Qxb4","Nb5","Qa5","Bc4","c6","Bxf7+","Kxf7","Qh5+","g6","Nd6+","exd6","Qxa5"],
+       note:"Білі жертвують два пішаки (b4), щоб виграти час і лінії. Коли чорні необережно грають 6...c6?, атакуючи коня, слідує 7.Bxf7+! Kxf7 8.Qh5+ g6, і тепер 9.Nd6+! — подвійний удар: шах королю і водночас лінія ферзя h5 розкривається по 5-й горизонталі просто на чорного ферзя. Після 9...exd6 (інакше не позбутися шаху) білі забирають ферзя: 10.Qxa5, залишаючись із вирішальною матеріальною перевагою за нікчемну ціну."},
+     variations:[
+       {name:"Сучасний варіант (Nf6)",moves:["e4","d5","exd5","Nf6"],note:"Замість негайного повернення пішака ферзем чорні спершу розвивають коня, плануючи забрати пішак d5 із темпом пізніше."},
+       {name:"Відступ ферзя на d6",moves:["e4","d5","exd5","Qxd5","Nc3","Qd6"],note:"Відступ на d6 ховає ферзя від подальших темпів і залишає йому шлях на e7 чи допомогу в захисті короля."}
+     ]
+   }},
+  {id:"budapest", name:"Будапештський гамбіт", eco:"A51", side:"black", coreMoves:6,
+   moves:["d4","Nf6","c4","e5","dxe5","Ng4","Bf4","Nc6","Nf3","Bb4+","Nbd2","Qe7"], moveComments:["Захоплюємо центр.","Чорні тиснуть на e4, готуючи несподіванку.","Розширюємо контроль над центром.","Чорні жертвують пішака заради темпу й активних фігур.","Білі приймають гамбіт — головна лінія.","Кінь одразу повертається, нападаючи на пішака e5 і пункт f2.","Захищаємо пішака e5 фігурою, а не поверненням матеріалу.","Чорні розвивають другого коня, посилюючи тиск на e5.","Розвиваємо коня, захищаючи зайвого пішака e5 ще раз.","Чорні розвивають слона з шахом, відволікаючи фігури білих.","Прикриваємо шах конем, зберігаючи пішака e5 під захистом.","Чорні готують Ngxe5, відіграючи пішака і зберігаючи ініціативу."],
+   description:"Чорні одразу жертвують пішака, щоб швидко розвинути фігури й націлитися на слабкі пункти e5 та f2.",
+   theory:{
+     idea:"Замість звичної боротьби за центр чорні віддають пішак e5, щоб конем миттєво напасти на нього назад і розвинути фігури з темпами, створюючи гострі, малодосліджені позиції вже на 3-4 ходу.",
+     plansWhite:["Утримати зайвого пішака, розвиваючись і уникаючи пасток на b4/e5","Зіграти Nf3 і Bf4, захищаючи пункт e5 фігурами","Пізніше протиснути c4-c5 або e4, обмежуючи фігури чорних","У варіанті Алехіна (4.e4) віддати пішак назад заради переваги в центрі"],
+     plansBlack:["Відіграти пішака e5 ходом Ngxe5, розмінюючи легкі фігури","Тиснути на слабкий пункт f2 фігурами ще до рокіровки","Розвинути другого коня на c6 і слона на b4 або c5","У разі помилки білих (передчасне a3) шукати тактичні удари навколо коня d3"],
+     trap:{name:"Пастка Кінінгера",
+       moves:["d4","Nf6","c4","e5","dxe5","Ng4","Bf4","Nc6","Nf3","Bb4+","Nbd2","Qe7","a3","Ngxe5","axb4","Nd3#"],
+       note:"Після 7.a3 білі нападають на слона b4, і здається, що це просто виграє фігуру. Але чорні спершу відіграють пішака: 7...Ngxe5!, і якщо білі все ж заберуть слона — 8.axb4?? — іде 8...Nd3# — задушений мат: пішак e2 зв'язаний ферзем чорних по вертикалі «e» і не може забрати коня, а решта полів навколо короля зайняті власними фігурами білих."},
+     variations:[
+       {name:"Відхилений гамбіт (d5)",moves:["d4","Nf6","c4","e5","d5"],note:"Білі відхиляють гамбіт, займаючи простір ходом d5 замість узяття пішака — гострих ускладнень при цьому не виникає."},
+       {name:"Варіант Фаяровича (Ne4)",moves:["d4","Nf6","c4","e5","dxe5","Ne4"],note:"Кінь одразу стрибає на e4 замість g4, борючись за темп по-іншому і уникаючи головних ліній."}
+     ]
+   }},
+  {id:"pirc", name:"Захист Пірца-Уфімцева", eco:"B07", side:"black", coreMoves:6,
+   moves:["e4","d6","d4","Nf6","Nc3","g6","Nf3","Bg7","Be2","O-O","O-O","c6"], moveComments:["Захоплюємо центр.","Чорні готують ...Nf6, не боячись e5 з темпом.","Розширюємо центр — саме цього й чекали чорні.","Чорні розвивають коня, тиснучи на e4.","Захищаємо e4 і продовжуємо розвиток.","Чорні готують фланкетто, атакуючи центр здалеку.","Класична система: розвиваємо коня, не поспішаючи з f4.","Чорні завершують фланкетто, тиснучи на довгу діагональ.","Скромно розвиваємо слона, готуючись рокіруватися.","Чорні ховають короля, завершуючи підготовку до підриву центру.","Рокіруємось у безпеку, зберігаючи гнучкість щодо подальшого плану.","Чорні готують d5 або b5, борючись за центр і фланг."],
+   description:"Чорні свідомо дозволяють білим зайняти простір у центрі, готуючись атакувати його фігурами через фланкетто.",
+   theory:{
+     idea:"Подібно до староіндійського захисту, чорні відкладають боротьбу за центр, розвиваючи слона на g7 через фланкетто і готуючись підірвати центр білих ходами e5 або c5 у слушний момент.",
+     plansWhite:["Зайняти центр пішаками e4 і d4, за потреби додати f4 (Австрійська атака)","Розвинути фігури і швидко рокіруватися, зберігаючи перевагу в просторі","Використати перевагу в розвитку для атаки на короля чи в центрі, поки чорні не підірвали структуру"],
+     plansBlack:["Розвинути слона на g7 через фланкетто, тиснучи на довгу діагональ","Підготувати e5 або c5, підриваючи центр білих","Стежити за слабкістю пункту d4 після розмінів у центрі"],
+     variations:[
+       {name:"Австрійська атака",moves:["e4","d6","d4","Nf6","Nc3","g6","f4"],note:"Білі негайно розширюють центр пішаком f4, готуючи Nf3 і швидкий наступ пішаками на королівському фланзі."},
+       {name:"Класична система (Nf3)",moves:["e4","d6","d4","Nf6","Nc3","g6","Nf3"],note:"Білі розвиваються спокійніше, зберігаючи гнучкість щодо подальшого плану атаки чи повільного маневрування."}
+     ]
+   }},
+  {id:"alekhine", name:"Захист Алехіна", eco:"B02", side:"black", coreMoves:4,
+   moves:["e4","Nf6","e5","Nd5","d4","d6","Nf3","Bg4","Be2","e6","O-O","Be7"], moveComments:["Захоплюємо центр.","Чорні провокують білих гнати коня пішаками.","Білі виганяють коня, займаючи ще більше простору.","Кінь відступає, продовжуючи провокацію.","Білі захоплюють ще більше центру.","Чорні готують підрив розтягнутого центру білих.","Система з Nf3: білі розвиваються спокійніше, ніж у чотирипішаковій атаці.","Чорні зв'язують коня, тиснучи на центр фігурами.","Готуємось розв'язати коня і рокіруватися.","Чорні відкривають слона f8, готуючись розвинути його.","Ховаємо короля в безпеку, завершуючи підготовку до боротьби за центр.","Чорні завершують розвиток легких фігур, готуючись до рокіровки."],
+   description:"Чорні провокують білих захопити весь центр пішаками, сподіваючись згодом підірвати його та скористатися перерозвиненістю суперника.",
+   theory:{
+     idea:"Чорні свідомо дозволяють білим пішакам просунутися вперед (c4, d4, f4), створюючи мішені для майбутнього контрудару — гіпермодерна ідея \"спочатку спровокувати, потім зруйнувати\".",
+     plansWhite:["Зайняти якнайбільше простору пішаками c4, d4, f4 (Чотирипішакова атака)","Розвинути фігури, використовуючи перевагу в просторі для атаки","Стежити, щоб перерозтягнутий центр не став слабкістю пізніше"],
+     plansBlack:["Провокувати білих на подальші пішакові ходи, відступаючи конем","Підготувати c5 або f6 (або обидва), підриваючи розтягнутий центр білих","Розвинути фігури швидко, поки білі витрачають час на пішакові ходи"],
+     variations:[
+       {name:"Чотирипішакова атака",moves:["e4","Nf6","e5","Nd5","d4","d6","c4","Nb6","f4"],note:"Білі йдуть на максимум, займаючи ще більше простору у відповідь на провокацію чорних."},
+       {name:"Система з Nc3",moves:["e4","Nf6","e5","Nd5","Nc3"],note:"Замість негайного d4 білі спершу розвивають коня, пропонуючи розмін і уникаючи гострих ліній чотирипішакової атаки."}
+     ]
+   }},
+  {id:"london", name:"Лондонська система", eco:"D02", side:"white", coreMoves:4,
+   moves:["d4","d5","Bf4","Nf6","Nf3","c5","e3","Nc6","Nbd2","e6","c3","Bd6"], moveComments:["Захоплюємо центр.","Чорні відповідають симетрично.","Виводимо слона до ходу e3, щоб не замкнути його.","Чорні розвивають коня класично.","Розвиваємо другого коня, готуючи рокіровку.","Чорні борються за центр із флангу.","Завершуємо пішакову структуру, відкриваючи слона f1.","Чорні розвивають коня, продовжуючи класичний розвиток.","Розвиваємо другого коня, готуючи можливий прорив e4.","Чорні відкривають слона f8, готуючись розвинути його.","Зміцнюємо центр, підтримуючи пішака d4 ще одним разом.","Чорні пропонують розмін слонів, оскаржуючи важливу діагональ."],
+   description:"Гнучка система розвитку за білих: слон виходить на f4 ще до ходу e3, після чого білі будують міцну структуру майже незалежно від дій чорних.",
+   theory:{
+     idea:"Білі грають за заданою схемою розвитку (Bf4, e3, Nf3, Bd3 або Be2, c3, Nbd2), майже не зважаючи на побудову чорних — надійний, малотеоретичний вибір.",
+     plansWhite:["Вивести слона на f4 до ходу e3, щоб не замикати його власними пішаками","Зіграти c3 та Nbd2, готуючи можливий прорив e4","Атакувати на королівському фланзі, якщо чорні рокірувалися туди"],
+     plansBlack:["Розвинути фігури класично і зіграти c5, борючись за центр","Розглянути фланкетто (g6, Bg7), тиснучи на діагональ і пункт d4","Підготувати Qb6 або Nh5, створюючи незручності слону f4"],
+     variations:[
+       {name:"Проти фланкетто чорних",moves:["d4","d5","Bf4","g6"],note:"Якщо чорні обирають фланкетто, слон f4 усе одно вже поза грою власних пішаків — білі просто продовжують за планом (e3, Nf3, c3)."},
+       {name:"Інший порядок ходів (Nf6 спочатку)",moves:["d4","Nf6","Bf4"],note:"Типовий порядок ходів у Лондонській системі: слон виходить на f4 навіть до d5 з боку чорних, оскільки план білих майже не залежить від відповіді суперника."}
+     ]
+   }},
+  {id:"scotch", name:"Шотландська партія", eco:"C45", side:"white", coreMoves:6,
+   moves:["e4","e5","Nf3","Nc6","d4","exd4","Nxd4","Nf6","Nxc6","bxc6","e5","Qe7"], moveComments:["Захоплюємо центр.","Чорні відповідають симетрично.","Атакуємо пішака e5.","Чорні захищають пішака.","Одразу розкриваємо центр, не чекаючи Bb5 чи Bc4.","Чорні змушені взяти, інакше втратять пішака без компенсації.","Кінь централізується, отримуючи чудову позицію та вільну гру.","Головна відповідь чорних: атакувати пішака e4 конем без зволікань.","Розмінюємо коней, псуючи пішакову структуру чорних на ферзевому фланзі.","Чорні відновлюють пішакову структуру, отримуючи натомість двох слонів.","Проганяємо коня, захоплюючи простір і виграючи темп.","Чорні відступають ферзем, зберігаючи можливість розвинути слона на активну позицію."],
+   description:"Білі одразу розкривають центр, обмінюючи пішака d4, щоб отримати простір і активні фігури.",
+   theory:{
+     idea:"На відміну від Іспанської партії, білі одразу вирішують суперечку в центрі, обмінюючи пішака і отримуючи вільну гру для фігур, особливо коня d4 та слонів.",
+     plansWhite:["Розвинути слона на c4 або e2, використовуючи відкриті лінії","Централізувати коня на d4, за потреби готуючи його підтримку","У гамбітних лініях (Bc4 замість Nxd4) жертвувати пішака заради темпу і атаки"],
+     plansBlack:["Розвинути коня на f6, атакуючи пішака e4","Розвинути слона на c5 або b4, тиснучи на коня d4","Стежити за розмінами в центрі, не дозволяючи білим отримати надто вільну гру"],
+     variations:[
+       {name:"Шотландський гамбіт",moves:["e4","e5","Nf3","Nc6","d4","exd4","Bc4"],note:"Замість негайного повернення матеріалу білі жертвують пішака заради швидкого розвитку і тиску на f7."},
+       {name:"Головна відповідь чорних (Nf6)",moves:["e4","e5","Nf3","Nc6","d4","exd4","Nxd4","Nf6"],note:"Найпринциповіша відповідь: атакувати пішак e4 конем одразу, не гаючи часу на повільний розвиток."}
+     ]
+   }},
+  {id:"kingsgambit", name:"Гамбіт короля", eco:"C30", side:"white", coreMoves:4,
+   moves:["e4","e5","f4","exf4","Nf3","g5","h4","g4","Ne5","Nf6","Bc4","d5"], moveComments:["Захоплюємо центр.","Чорні відповідають симетрично.","Жертвуємо пішака заради темпу, лінії «f» і центру.","Чорні приймають гамбіт — головна лінія.","Розвиваємо коня, не поспішаючи одразу відігравати пішака.","Чорні утримують зайвого пішака, готуючи фланг для контролю над f4.","Атакуємо пішака g5, змушуючи чорних визначитися.","Чорні відганяють коня, жертвуючи ще один пішак заради ініціативи.","Кінь стрибає на активне поле — Гамбіт Кізерицького.","Чорні розвивають коня, атакуючи пішака e4 і готуючи повернути матеріал.","Розвиваємо слона на активну діагональ до f7.","Чорні контратакують у центрі, використовуючи момент."],
+   description:"Білі жертвують пішака f, щоб розкрити лінію «f» і швидко захопити центр ходом d4.",
+   theory:{
+     idea:"Один із найстаріших і найгостріших дебютів: білі віддають пішак заради темпу, відкритої лінії «f» для тури та широкого центру, розраховуючи на атаку раніше, ніж чорні встигнуть розвинутися.",
+     plansWhite:["Зіграти d4, займаючи широкий центр і відкриваючи лінії для фігур","Повернути пішака в слушний момент заради розвитку та атаки на короля","Використати відкриту лінію «f» для тиску на f7"],
+     plansBlack:["Утримати зайвого пішака, розвиваючись обережно і уникаючи пасток","Зіграти d5, негайно підриваючи центр білих","Розглянути Гамбіт короля відхилений (Bc5), уникаючи гострих ускладнень"],
+     variations:[
+       {name:"Гамбіт короля відхилений",moves:["e4","e5","f4","Bc5"],note:"Чорні не беруть пішака, розвиваючи слона з атакою на f2 і уникаючи гострих ускладнень прийнятого гамбіту."},
+       {name:"Гамбіт слона",moves:["e4","e5","f4","exf4","Bc4"],note:"Білі одразу розвивають слона на активну діагональ до f7, відкладаючи Nf3 і готуючи Qh5+ чи швидку атаку."}
+     ]
+   }},
+];
+
+const PUZZLES = [
+  {id:'p1', difficulty:'easy', theme:'Мат в 1 хід — лінійний мат',
+   fen:'7k/6pp/8/8/8/8/5PPP/R5K1 w - - 0 1',
+   solution:['Ra8#'],
+   hint:'Король застряг у кутку — використай відкриту вертикаль «a».',
+   explanation:'Тура йде на a8 із шахом по 8-й горизонталі. Король не може втекти на g8 (під боєм тури) чи на g7/h7 (там власні пішаки) — мат.'},
+  {id:'p2', difficulty:'easy', theme:'Вилка конем',
+   fen:'2r1k3/8/8/8/4N3/8/8/6K1 w - - 0 1',
+   solution:['Nd6+'],
+   hint:'Знайди поле, з якого кінь атакує і короля, і туру одночасно.',
+   explanation:'Кінь стрибає на d6 із шахом і водночас атакує туру на c8. Чорні змушені відступити королем, після чого білі забирають туру: Nxc8.'},
+  {id:'p3', difficulty:'easy', theme:'Наскрізний удар (шпилька)',
+   fen:'8/8/8/4k2q/8/8/8/R5K1 w - - 0 1',
+   solution:['Ra5+'],
+   hint:'Постав туру на ту саму горизонталь, де стоять король і ферзь.',
+   explanation:'Тура шахує короля по 5-й горизонталі. Королю доведеться піти, і тоді тура забирає ферзя: Rxh5.'},
+  {id:'p4', difficulty:'easy', theme:'Вилка пішаком',
+   fen:'4k3/1b1n4/8/2P5/8/8/8/6K1 w - - 0 1',
+   solution:['c6'],
+   hint:'Пішак атакує дві сусідні діагональні клітинки одночасно.',
+   explanation:'Пішак іде на c6 і атакує одразу слона на b7 і коня на d7 — одну з фігур чорні неминуче втратять.'},
+  {id:'p5', difficulty:'medium', theme:'Відкритий (дискований) напад',
+   fen:'3k4/8/8/8/3B3q/8/8/K2R4 w - - 0 1',
+   solution:['Bf6+'],
+   hint:'Прибери слона з вертикалі «d» так, щоб він сам напав на ферзя.',
+   explanation:'Слон іде на f6: тура одразу дає шах по вертикалі d, а сам слон нападає на ферзя h4. Куди б не пішов король, ферзь чорних гине.'},
+  {id:'p6', difficulty:'easy', theme:'Мат сходами (дві тури)',
+   fen:'7k/R7/8/8/8/8/8/1R4K1 w - - 0 1',
+   solution:['Rb8#'],
+   hint:'Одна тура вже відрізає горизонталь — заведи другу на останню лінію.',
+   explanation:'Тура a7 контролює всю 7-му горизонталь, тож король не втече вниз. Друга тура йде на b8 — мат по 8-й горизонталі.'},
+  {id:'p7', difficulty:'easy', theme:'Зв\'язка',
+   fen:'4k3/8/2n5/1B6/8/8/8/6K1 w - - 0 1',
+   solution:['Bxc6+'],
+   hint:'Кінь чорних давно не міг зрушити з місця — подумай чому.',
+   explanation:'Слон уже тримав коня зв\'язаним по діагоналі до короля. Тепер білі просто забирають фігуру із шахом: Bxc6+.'},
+  {id:'p8', difficulty:'medium', theme:'Вилка ферзем',
+   fen:'4k3/r7/8/2n5/8/8/8/1Q4K1 w - - 0 1',
+   solution:['Qb6'],
+   hint:'Знайди клітинку, з якої ферзь одразу нападає на дві чорні фігури по різних діагоналях.',
+   explanation:'Ферзь стає на b6 і одночасно атакує тур на a7 і коня на c5 по двох діагоналях — обидві фігури не захищені, тож чорні неминуче втрачають одну з них.'},
+  {id:'p9', difficulty:'medium', theme:'Спертий мат',
+   fen:'6rk/6pp/8/6N1/8/8/8/6K1 w - - 0 1',
+   solution:['Nf7#'],
+   hint:'Король чорних оточений власними фігурами — йому нікуди тікати від шаху конем.',
+   explanation:'Тура на g8 і пішаки на g7, h7 самі "заперли" власного короля. Кінь іде на f7 із шахом, і жодна фігура не може ні заблокувати, ні побити його — мат.'},
+  {id:'p10', difficulty:'medium', theme:'Вилка турою',
+   fen:'4k3/8/8/8/b6n/8/8/3R2K1 w - - 0 1',
+   solution:['Rd4'],
+   hint:'Постав туру на ту вертикаль... ні, на ту горизонталь, де стоять слон і кінь суперника.',
+   explanation:'Тура йде на d4 і опиняється на одній горизонталі з незахищеними слоном (a4) і конем (h4) одночасно — врятувати вдасться лише одну фігуру.'},
+  {id:'p11', difficulty:'medium', theme:'Вилка слоном',
+   fen:'4k3/6r1/8/8/8/2n5/7K/6B1 w - - 0 1',
+   solution:['Bd4'],
+   hint:'Знайди клітинку по діагоналі, з якої слон одразу «бачить» і туру, і коня.',
+   explanation:'Слон стає на d4 і водночас атакує туру на g7 та коня на c3 по двох різних діагоналях — обидві фігури не захищені, тож одну з них чорні неминуче втратять.'},
+  {id:'p12', difficulty:'hard', theme:'Розкритий шах',
+   fen:'4k3/3q4/8/4N3/8/8/8/4R1K1 w - - 0 1',
+   solution:['Nxd7'],
+   hint:'Тура вже цілиться в короля по вертикалі «e» — їй лише заважає власний кінь.',
+   explanation:'Кінь забирає ферзя на d7 і водночас іде з вертикалі «e», відкриваючи шах турі з e1 просто на короля e8. Чорні не встигають нічого зробити — фігуру виграно з темпом.'},
+  {id:"p13", difficulty:"medium", theme:"Подвійний удар",
+   fen:"1r2k3/8/8/8/8/8/8/4Q1K1 w - - 0 1",
+   solution:["Qe5+"],
+   hint:"Знайди хід ферзем, який одночасно дає шах і нападає на туру.",
+   explanation:"Ферзь іде на e5: це шах по вертикалі «e», а водночас та сама клітинка лежить на діагоналі до тури b8. Королю доведеться відійти, і білі заберуть туру: Qxb8."},
+  {id:"p14", difficulty:"hard", theme:"Відволікання (перевантажена фігура)",
+   fen:"3r2k1/5ppp/8/3b4/8/8/8/3RR1K1 w - - 0 1",
+   solution:["Rxd5"],
+   hint:"Одна чорна тура захищає одразу дві речі. Забери те, що вона захищає, і подивись, що станеться, коли вона відповість.",
+   explanation:"Тура d8 одночасно захищає слона d5 і тримає під контролем поле e8 (не даючи білим зіграти туди). Rxd5! змушує чорних або втратити фігуру задарма, або відповісти Rxd5 — але тоді поле e8 залишається без захисту, і білі ставлять мат: Re8#."},
+  {id:"p15", difficulty:"hard", theme:"Звільнення поля",
+   fen:"6k1/5p1p/2q5/4N3/8/8/1B6/6K1 w - - 0 1",
+   solution:["Nxc6"],
+   hint:"Кінь атакує ферзя — і водночас звільняє важливу діагональ для твого слона.",
+   explanation:"Nxc6! забирає ферзя чорних просто так. Водночас кінь іде з клітинки e5, звільняючи слону b2 діагональ a1-h8 — після цього ходу слон вже дивиться просто на ослаблений королівський фланг чорних (пішака g7 немає), створюючи додаткові проблеми."},
+  {id:"p16", difficulty:"easy", theme:"Мат на останній горизонталі",
+   fen:"6k1/5ppp/8/8/Q7/8/8/6K1 w - - 0 1",
+   solution:["Qe8#"],
+   hint:"Королю чорних нікуди тікати — власні пішаки перекрили всі поля другого ряду.",
+   explanation:"Ферзь іде по діагоналі на e8 із шахом по 8-й горизонталі. Пішаки f7, g7, h7 позбавляють короля будь-якого відступу — мат."},
+  {id:"p17", difficulty:"hard", theme:"Проміжний хід (цвішенцуг)",
+   fen:"6k1/5ppp/2p5/3N4/8/8/8/R5K1 w - - 0 1",
+   solution:["Ra8#"],
+   hint:"Не поспішай рятувати коня, якому щось загрожує — спочатку перевір, чи є хід сильніший за будь-яку розмінну операцію.",
+   explanation:"Пішак c6 атакує коня d5, і здається, що спершу треба подбати про нього. Але замість цього є набагато сильніший проміжний хід: Ra8# — мат по 8-й горизонталі, після якого доля коня вже не має жодного значення."},
+  {id:"p18", difficulty:"medium", theme:"Зв'язка на службі: виграш фігури",
+   fen:"4k3/8/2n5/1B6/3P4/8/8/6K1 w - - 0 1",
+   solution:["d5"],
+   hint:"Кінь чорних уже прикутий до місця — слон зв'язав його з королем. Знайди спосіб напасти на нього ще раз.",
+   explanation:"Кінь c6 не може зрушити з місця: слон b5 зв'язує його з королем e8 по діагоналі. Хід 1.d5! додає другого нападника на зв'язану фігуру — чорні нічим її не захистять і неминуче втратять коня."},
+  {id:"p19", difficulty:"medium", theme:"Вилка слоном по далекій діагоналі",
+   fen:"4k3/r4ppp/8/B1n5/8/8/5PPP/6K1 w - - 0 1",
+   solution:["Bb6"],
+   hint:"Знайди поле по діагоналі, з якого слон одразу «бачить» і туру, і коня.",
+   explanation:"1.Bb6! ставить слона на клітинку, з якої він одночасно атакує туру a7 і коня c5 — обидві фігури незахищені, тож одну з них чорні неминуче втратять."},
+  {id:"p20", difficulty:"easy", theme:"Прохідний пішак стає ферзем із шахом",
+   fen:"4k3/P7/8/8/8/8/8/6K1 w - - 0 1",
+   solution:["a8=Q+","a8=Q"],
+   hint:"Пішак за крок від перетворення — і поле перетворення саме на лінії короля.",
+   explanation:"1.a8=Q+! Пішак перетворюється на ферзя одразу з шахом по 8-й горизонталі, оскільки король чорних стоїть на цій самій лінії."},
+  {id:"p21", difficulty:"medium", theme:"Вилка турою по вертикалі",
+   fen:"4k3/5ppp/3n4/8/7R/8/3b1PPP/6K1 w - - 0 1",
+   solution:["Rd4"],
+   hint:"Постав туру на вертикаль, де стоять і кінь, і слон суперника.",
+   explanation:"1.Rd4! Тура стає на вертикаль «d» і атакує одразу коня d6 та слона d2 — жодна з фігур не захищена, тож одну з них чорні втратять."},
+  {id:"p22", difficulty:"hard", theme:"«Королівська» вилка ферзем",
+   fen:"4k2r/5p1p/6p1/8/8/8/5PP1/Q5K1 w - - 0 1",
+   solution:["Qe5+"],
+   hint:"Знайди поле, з якого ферзь одразу дає шах і по одній лінії, а по іншій — нападає на туру.",
+   explanation:"1.Qe5+! Ферзь шахує короля по вертикалі «e» і водночас нападає на туру h8 по діагоналі e5-h8. Королю доведеться відходити, і білі заберуть туру: 2.Qxh8+."}
+];
+
+/* ===================== ЕНДШПІЛІ ===================== */
+// Технічні ендшпілі: тренуються як вільна гра проти вбудованого рушія,
+// починаючи з навчальної позиції — тут немає єдиної "правильної" лінії ходів,
+// важливо лише зрештою поставити мат.
+const ENDGAME_TECHNIQUES = [
+  {id:"mate-kq", kind:"technique", name:"Мат королем і ферзем",
+   description:"Найважливіший базовий навик у шаховому ендшпілі: постав мат самотньому королю суперника, маючи свого короля й ферзя. Це трапляється в партіях набагато частіше за будь-яку дебютну пастку.",
+   startFen:"8/8/8/4k3/8/8/8/1Q2K3 w - - 0 1",
+   theory:{
+     idea:"Ферзь відтісняє короля суперника до краю дошки, тримаючись на відстані «ходу коня» від нього, щоб не дати пата. Коли король суперника притиснутий до краю, власний король підходить ближче, і мат ставиться спільно.",
+     plansWhite:[
+       "Постав ферзя на відстані ходу коня від короля суперника — це звужує його простір, не залишаючи його без жодного ходу",
+       "Крок за кроком відтісняй короля до краю дошки, щохвилини перевіряючи, чи не поставиш пат",
+       "Коли король суперника наближається до краю, підведи свого короля ближче — саме король, а не ферзь, довершує справу",
+       "Постав мат на останній горизонталі чи вертикалі, коли ферзь дає шах, а твій король відрізає поля для втечі"
+     ],
+     plansBlack:["Тікай у центр дошки, поки є можливість","Уникай країв і кутів якнайдовше"]
+   }},
+  {id:"mate-kr", kind:"technique", name:"Мат королем і турою",
+   description:"Класична техніка «коробки»: тура відтісняє короля суперника до краю дошки, а твій король допомагає довершити мат.",
+   startFen:"8/8/8/4k3/8/8/8/R3K3 w - - 0 1",
+   theory:{
+     idea:"Тура відрізає короля суперника по вертикалі або горизонталі, утворюючи для нього «коробку». Щойно король суперника наближається до тури впритул, тура відступає вздовж лінії, зберігаючи відрізану зону. Тим часом власний король підходить ближче й звужує коробку далі, аж доки короля суперника не притиснуто до краю дошки для мату.",
+     plansWhite:[
+       "Відріж короля суперника турою по вертикалі або горизонталі",
+       "Якщо король суперника підходить впритул до тури, відступи нею вздовж лінії відрізання, зберігаючи дистанцію",
+       "Веди свого короля ближче, використовуючи опозицію, щоб звужувати коробку суперника",
+       "Постав мат, коли король суперника притиснутий до краю дошки, а твій король відрізає всі сусідні поля для втечі"
+     ],
+     plansBlack:["Намагайся наблизитися до тури, щоб напасти на неї","Уникай краю дошки якомога довше"]
+   }}
+];
+
+// Пазли на пішакові ендшпілі й опозицію: формат такий самий, як у тактиці
+// (позиція + єдиний правильний перший хід). Кожна позиція нижче перевірена
+// повним перебором усіх ходів обох сторін (а не лише «на око»), тому
+// вказаний хід справді єдиний, що зберігає результат.
+const ENDGAME_PUZZLES = [
+  {id:"pe1", kind:"puzzle", theme:"Опозиція: не кожен хід королем однаковий",
+   fen:"4k3/8/4K3/4P3/8/8/8/8 w - - 0 1",
+   solution:["Kf6"],
+   hint:"Три ходи королем виглядають цілком природно, і лише один із чотирьох насправді зберігає перемогу. Подумай, у який бік краще відступити від пішака, щоб потім обійти чорного короля.",
+   explanation:"Тільки 1.Kf6! зберігає виграш. Хід здається дивним — король ніби відходить від свого пішака — але саме так білий король отримує можливість обійти чорного короля з потрібного боку та зайняти вирішальне поле перед пішаком. Ходи 1.Kd6, 1.Kd5 і 1.Kf5 виглядають не гірше, але насправді випускають перемогу: чорний король встигає закріпитися перед пішаком і утримати нічию завдяки опозиції."}
+];
+
+/* ===================== ТРЕНАЖЕР CCT (ШАХИ · ВЗЯТТЯ · ЗАГРОЗИ) ===================== */
+// Головна причина втрати фігур в аматорських партіях — не незнання дебютів,
+// а звичка не перевіряти перед кожним ходом три речі: чи є шахи (Checks),
+// чи є взяття (Captures) і що загрожує після останнього ходу суперника
+// (Threats). Кожна задача тут показує позицію одразу після ходу суперника
+// (lastMove — лише для підсвітки на дошці) і дає покроковий чекліст CCT,
+// перш ніж просити знайти найкращий хід.
+const CCT_PUZZLES = [
+  {id:"cct1", theme:"Крок 1: чи в безпеці мої фігури?",
+   fen:"4k3/5ppp/8/8/1b6/2N5/5PPP/6K1 w - - 0 1",
+   lastMove:{from:"c5", to:"b4"},
+   checklist:{
+     checks:"Немає жодного шаху — ні тобі, ні від тебе.",
+     captures:"Прямих взять немає: слон b4 не б'ється, і кінь c3 не може його забрати.",
+     threats:"Слон b4 щойно напав на коня c3 — якщо не відреагувати, кінь пропаде задарма."
+   },
+   solution:["Nd5","Ne4","Na4","Nb5"],
+   hint:"Кінь під боєм — знайди для нього безпечне поле.",
+   explanation:"Слон b4 атакує коня c3, і жодна фігура його не захищає. Достатньо просто відвести коня на будь-яке безпечне поле (наприклад, Nd5 чи Ne4) — головне вчасно помітити загрозу, а не продовжувати грати «на автоматі»."},
+  {id:"cct2", theme:"Крок 3: що змінилося після тихого ходу суперника?",
+   fen:"6k1/p2n1pbp/8/8/8/8/P4PPP/R5K1 w - - 0 1",
+   lastMove:{from:"f6", to:"d7"},
+   checklist:{
+     checks:"Шахів немає.",
+     captures:"Забрати поки що нічого — слон g7 надто далеко від будь-якої твоєї фігури.",
+     threats:"Кінь щойно пішов з f6 на d7 — виглядає як звичайний розвиток. Але тепер діагональ a1-h8 повністю відкрита, і слон g7 в'їхав просто в туру a1!"
+   },
+   solution:["Rb1","Rc1","Rd1","Re1","Rf1"],
+   hint:"Перевір довгу діагональ від a1 до h8 — чи справді вона тепер вільна?",
+   explanation:"Хід конем із f6 виглядав нешкідливим, але саме він відкрив слону g7 діагональ на туру a1. Це класичний «тихий» хід, що створює приховану загрозу: тура опинилась під боєм, і її потрібно негайно врятувати."},
+  {id:"cct3", theme:"Крок 3: перевір усі поля для стрибка коня, а не тільки очевидне",
+   fen:"6k1/p4ppp/8/8/3n4/8/5PPP/R3K3 w - - 0 1",
+   lastMove:{from:"f5", to:"d4"},
+   checklist:{
+     checks:"Поки що немає, але кінь чорних стоїть дуже активно в центрі.",
+     captures:"Прямих взять немає.",
+     threats:"Кінь загрожує стрибком на c2 із шахом, який водночас нападе і на короля, і на туру a1 — вилка!"
+   },
+   solution:["Kf1","Kd1"],
+   hint:"Одного відходу короля недостатньо — перевір ВСІ поля, куди може стрибнути кінь, а не тільки очевидне c2.",
+   explanation:"Найочевидніша загроза — Nc2+, вилка короля і тури. Але поверхневе рішення 1.Kd2? не рятує: чорні знаходять інше поле для тієї самої вилки — 1...Nb3+!, знову атакуючи короля і туру. Лише хід королем подалі від обох небезпечних полів (1.Kf1 або 1.Kd1) повністю знімає загрозу: жоден стрибок коня вже не дає шаху, і туру завжди можна буде вчасно відвести."},
+  {id:"cct4", theme:"Крок 2: чи є взяття, які легко пропустити?",
+   fen:"4k3/5ppp/8/3q4/8/2N5/5PPP/6K1 w - - 0 1",
+   lastMove:{from:"d8", to:"d5"},
+   checklist:{
+     checks:"Немає.",
+     captures:"Так! Кінь c3 атакує поле d5, куди щойно став ферзь.",
+     threats:"Прямої загрози твоїм фігурам немає — а ось у суперника серйозна помилка."
+   },
+   solution:["Nxd5"],
+   hint:"Подивись, які поля атакує твій кінь — здається, суперник забув саме про це.",
+   explanation:"Чорні щойно поставили ферзя на d5, не помітивши, що це поле атакує білий кінь з c3. 1.Nxd5! забирає ферзя безкоштовно — саме тому кроки CCT варто проходити навіть тоді, коли хід суперника виглядає цілком природним."}
+];
+
+/* ===================== СТАН ===================== */
+
+let currentTab = 'openings';
+let currentOpening = null;
+let currentPuzzle = null;
+let currentEndgameItem = null;
+let currentCCT = null;
+let endgamePuzzleSolved = false;
+let cctSolved = false;
+let chess = null;
+let moveIndex = 0;
+let userColor = 'w';
+let selected = null;
+let legalTargets = [];
+let lastMove = null;
+let puzzleSolved = false;
+let flipped = false;
+let isReplaying = false;
+let replayTimers = [];
+let streak = 0;
+let freePlay = false;
+let principleMode = false; // після обов'язкової частини дебюту — вільна гра за принципами
+let principleMoveLog = []; // {moveNo, san, lossCp, bestSan} для кожного ходу гравця у вільній частині
+let tacticsFilter = 'all'; // фільтр складності на вкладці "Тактика": all | easy | medium | hard
+
+/* drag & drop state */
+let dragActive = false;
+let dragMoved = false;
+let dragFromSquare = null;
+let dragGhostEl = null;
+let dragPointerId = null;
+let dragStartX = 0, dragStartY = 0;
+const DRAG_THRESHOLD = 5;
+
+function clearReplayTimers(){
+  replayTimers.forEach(t=>clearTimeout(t));
+  replayTimers = [];
+  isReplaying = false;
+}
+
+const PROG_KEY_OPENINGS = 'chess_trainer_openings_progress_v1';
+const PROG_KEY_TACTICS = 'chess_trainer_tactics_progress_v1';
+const PROG_KEY_ENDGAMES = 'chess_trainer_endgames_progress_v1';
+const PROG_KEY_CCT = 'chess_trainer_cct_progress_v1';
+const ENDGAMES = ENDGAME_TECHNIQUES.concat(ENDGAME_PUZZLES);
+const DIFFICULTY_LABELS = {easy:'Легка', medium:'Середня', hard:'Складна'};
+
+function loadProgress(key){
+  try{ return JSON.parse(localStorage.getItem(key)) || {}; }catch(e){ return {}; }
+}
+function saveProgress(key, data){
+  try{ localStorage.setItem(key, JSON.stringify(data)); }catch(e){}
+}
+
+/* ===================== РЕПЕРТУАР КОРИСТУВАЧА ===================== */
+// Дозволяє позначити зірочкою "мої" дебюти (окремо за білих і за чорних —
+// це вже випливає з поля op.side) і фільтрувати список за цим.
+const REPERTOIRE_KEY = 'chess_trainer_repertoire_v1';
+function loadRepertoire(){
+  try{ return JSON.parse(localStorage.getItem(REPERTOIRE_KEY)) || {}; }catch(e){ return {}; }
+}
+function saveRepertoire(rep){
+  try{ localStorage.setItem(REPERTOIRE_KEY, JSON.stringify(rep)); }catch(e){}
+}
+function isInRepertoire(id){
+  return !!loadRepertoire()[id];
+}
+function toggleRepertoire(id){
+  const rep = loadRepertoire();
+  rep[id] = !rep[id];
+  saveRepertoire(rep);
+}
+let openingsFilter = 'all'; // фільтр списку дебютів: all | white | black | mine
+
+/* ===================== СУВОРІСТЬ ПЕРЕВІРКИ ПРИНЦИПІВ ===================== */
+// "Строго" — поточна поведінка (для новачків): усі перевірки активні.
+// "М'яко" — для досвідченіших: дозволяє ранній вихід ферзя, крайні пішаки
+// й пожертви легкої фігури заради атаки; залишається лише явне "дарма віддав
+// туру чи ферзя".
+const STRICTNESS_KEY = 'chess_trainer_strictness_v1';
+function loadStrictness(){
+  try{ return localStorage.getItem(STRICTNESS_KEY) || 'strict'; }catch(e){ return 'strict'; }
+}
+function saveStrictness(v){
+  try{ localStorage.setItem(STRICTNESS_KEY, v); }catch(e){}
+}
+let strictness = loadStrictness(); // 'strict' | 'soft'
+
+/* ===================== ІНТЕРВАЛЬНЕ ПОВТОРЕННЯ (SRS) ===================== */
+// Записи прогресу зберігаються як {done, reps, lastAt, dueAt}. Стара версія
+// зберігала просто true/false — така позначка трактується як «час повторити».
+const DAY_MS = 24 * 60 * 60 * 1000;
+const SRS_MAX_INTERVAL_DAYS = 30;
+
+function isDone(entry){
+  return !!entry;
+}
+function isDue(entry){
+  if(!entry) return false;
+  if(entry === true) return true; // старий формат — одразу пропонуємо повторити
+  return !!(entry.dueAt && entry.dueAt <= Date.now());
+}
+// Людський формат дати наступного повторення — щоб SRS було видно в
+// інтерфейсі, а не лише "прошито" в localStorage.
+function formatDueIn(dueAt){
+  const days = Math.round((dueAt - Date.now()) / DAY_MS);
+  if(days <= 0) return 'сьогодні';
+  if(days === 1) return 'завтра';
+  if(days < 7) return `за ${days} дн.`;
+  try{
+    return new Date(dueAt).toLocaleDateString('uk-UA', {day:'2-digit', month:'2-digit'});
+  }catch(e){
+    return `за ${days} дн.`;
+  }
+}
+function markCompleted(key, id){
+  const prog = loadProgress(key);
+  const prev = prog[id];
+  const prevReps = (prev && typeof prev === 'object' && prev.reps) ? prev.reps : 0;
+  const reps = prevReps + 1;
+  const intervalDays = Math.min(SRS_MAX_INTERVAL_DAYS, Math.pow(2, reps - 1));
+  prog[id] = { done:true, reps, lastAt: Date.now(), dueAt: Date.now() + intervalDays * DAY_MS };
+  saveProgress(key, prog);
+}
+function countDue(key, items){
+  const prog = loadProgress(key);
+  return items.filter(it => isDue(prog[it.id])).length;
+}
+
+/* ===================== DOM ===================== */
+
+const itemListEl = document.getElementById('itemList');
+const itemHeaderEl = document.getElementById('itemHeader');
+const boardEl = document.getElementById('board');
+const statusEl = document.getElementById('statusMsg');
+const moveListEl = document.getElementById('moveList');
+const hintBox = document.getElementById('hintBox');
+const explainBox = document.getElementById('explainBox');
+const moveCommentBox = document.getElementById('moveCommentBox');
+const freePlayBox = document.getElementById('freePlayBox');
+const playVsEngineBtn = document.getElementById('playVsEngineBtn');
+const analysisBtnBox = document.getElementById('analysisBtnBox');
+const analysisBtn = document.getElementById('analysisBtn');
+const statsLine = document.getElementById('statsLine');
+const themeToggleBtn = document.getElementById('themeToggle');
+
+const THEME_KEY = 'chess_trainer_theme_v1';
+function applyTheme(theme){
+  document.body.classList.toggle('light-theme', theme === 'light');
+  themeToggleBtn.textContent = theme === 'light' ? '🌙' : '☀️';
+}
+applyTheme((function(){ try{ return localStorage.getItem(THEME_KEY) || 'dark'; }catch(e){ return 'dark'; } })());
+themeToggleBtn.addEventListener('click', ()=>{
+  const next = document.body.classList.contains('light-theme') ? 'dark' : 'light';
+  applyTheme(next);
+  try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+});
+
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    renderItemList();
+    if(currentTab === 'openings'){ selectOpening(OPENINGS[0].id); }
+    else if(currentTab === 'endgames'){ selectEndgame(ENDGAMES[0].id); }
+    else if(currentTab === 'cct'){ selectCCT(CCT_PUZZLES[0].id); }
+    else { selectPuzzle(PUZZLES[0].id); }
+  });
+});
+
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(currentTab === 'openings') selectOpening(currentOpening.id);
+  else if(currentTab === 'endgames') selectEndgame(currentEndgameItem.id);
+  else if(currentTab === 'cct') selectCCT(currentCCT.id);
+  else selectPuzzle(currentPuzzle.id);
+});
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  if(isReplaying) return;
+  if(dragActive){ cleanupDrag(); }
+  const undone = chess.undo();
+  if(!undone) return;
+  if(currentTab === 'openings'){
+    if(!principleMode && !freePlay){
+      moveIndex = Math.max(0, moveIndex - 1);
+      if(chess.turn() !== userColor){
+        const undone2 = chess.undo();
+        if(undone2){ moveIndex = Math.max(0, moveIndex - 1); }
+      }
+    } else if(chess.turn() !== userColor){
+      chess.undo();
+    }
+    setStatus('Хід скасовано. Твій хід.', '');
+    moveCommentBox.style.display = 'none';
+  } else if(currentTab === 'endgames' && currentEndgameItem.kind === 'technique'){
+    if(chess.turn() !== userColor){
+      const undone2 = chess.undo();
+    }
+    setStatus('Хід скасовано. Твій хід.', '');
+  } else if(currentTab === 'endgames'){
+    endgamePuzzleSolved = false;
+    explainBox.style.display = 'none';
+    setStatus('Хід скасовано. Спробуй ще раз.', '');
+  } else if(currentTab === 'cct'){
+    cctSolved = false;
+    explainBox.style.display = 'none';
+    setStatus('Хід скасовано. Спробуй ще раз.', '');
+  } else {
+    puzzleSolved = false;
+    explainBox.style.display = 'none';
+    setStatus('Хід скасовано. Спробуй ще раз.', '');
+  }
+  selected = null; legalTargets = []; lastMove = null;
+  renderBoard();
+  renderMoveList();
+});
+document.getElementById('nextBtn').addEventListener('click', ()=>{
+  if(currentTab === 'openings'){
+    const rep = loadRepertoire();
+    let pool = OPENINGS;
+    if(openingsFilter === 'white') pool = OPENINGS.filter(o=>o.side==='white');
+    else if(openingsFilter === 'black') pool = OPENINGS.filter(o=>o.side==='black');
+    else if(openingsFilter === 'mine') pool = OPENINGS.filter(o=>rep[o.id]);
+    const list = pool.length ? pool : OPENINGS;
+    const idx = list.findIndex(o=>o.id===currentOpening.id);
+    const next = list[(idx+1) % list.length] || list[0];
+    selectOpening(next.id);
+  } else if(currentTab === 'endgames'){
+    const idx = ENDGAMES.findIndex(e=>e.id===currentEndgameItem.id);
+    const next = ENDGAMES[(idx+1) % ENDGAMES.length];
+    selectEndgame(next.id);
+  } else if(currentTab === 'cct'){
+    const idx = CCT_PUZZLES.findIndex(c=>c.id===currentCCT.id);
+    const next = CCT_PUZZLES[(idx+1) % CCT_PUZZLES.length];
+    selectCCT(next.id);
+  } else {
+    const pool = tacticsFilter === 'all' ? PUZZLES : PUZZLES.filter(p=>p.difficulty===tacticsFilter);
+    const list = pool.length ? pool : PUZZLES;
+    const idx = list.findIndex(p=>p.id===currentPuzzle.id);
+    const next = list[(idx+1) % list.length] || list[0];
+    selectPuzzle(next.id);
+  }
+});
+document.getElementById('hintBtn').addEventListener('click', ()=>{
+  hintBox.style.display = hintBox.style.display === 'none' ? 'block' : 'none';
+});
+
+/* ===================== СПИСОК ПУНКТІВ ===================== */
+
+function renderItemList(){
+  itemListEl.innerHTML = '';
+  const progKey = currentTab === 'openings' ? PROG_KEY_OPENINGS : currentTab === 'endgames' ? PROG_KEY_ENDGAMES : currentTab === 'cct' ? PROG_KEY_CCT : PROG_KEY_TACTICS;
+  const progress = loadProgress(progKey);
+  const items = currentTab === 'openings' ? OPENINGS : currentTab === 'endgames' ? ENDGAMES : currentTab === 'cct' ? CCT_PUZZLES : PUZZLES;
+
+  const addItemBtn = (it)=>{
+    const entry = progress[it.id];
+    const due = isDue(entry);
+    const done = isDone(entry);
+    const b = document.createElement('button');
+    b.className = 'item-btn' + (done ? ' done' : '') + (due ? ' due' : '');
+    const dueNoteText = (entry && typeof entry === 'object' && entry.dueAt && !due) ? `Повторення: ${formatDueIn(entry.dueAt)}` : '';
+    b.title = due ? 'Час повторити ще раз' : dueNoteText ? dueNoteText : (done ? 'Вже пройдено' : '');
+    const dot = it.difficulty ? `<span class="diff-dot ${it.difficulty}" title="${DIFFICULTY_LABELS[it.difficulty]}"></span>` : '';
+    const dueNoteHtml = dueNoteText ? `<span class="item-due-note">${dueNoteText}</span>` : '';
+    b.innerHTML = `<span class="item-label">${dot}<span class="item-label-text"><span class="txt">${it.name || it.theme}</span>${dueNoteHtml}</span></span><span class="badge">${due ? '↻' : ''}</span>`;
+    b.addEventListener('click', ()=>{
+      if(currentTab === 'openings') selectOpening(it.id);
+      else if(currentTab === 'endgames') selectEndgame(it.id);
+      else if(currentTab === 'cct') selectCCT(it.id);
+      else selectPuzzle(it.id);
+    });
+    b.dataset.id = it.id;
+    if(currentTab === 'openings'){
+      // Зірочка — окрема кнопка поряд, а не всередині item-btn (вкладати
+      // <button> в <button> не можна — браузер поламає розмітку).
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      const star = document.createElement('button');
+      star.type = 'button';
+      const mine = isInRepertoire(it.id);
+      star.className = 'rep-star' + (mine ? ' active' : '');
+      star.title = mine ? 'Прибрати з мого репертуару' : 'Додати до мого репертуару';
+      star.textContent = mine ? '★' : '☆';
+      star.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        toggleRepertoire(it.id);
+        renderItemList();
+      });
+      row.appendChild(b);
+      row.appendChild(star);
+      itemListEl.appendChild(row);
+    } else {
+      itemListEl.appendChild(b);
+    }
+  };
+
+  if(currentTab === 'endgames'){
+    const label1 = document.createElement('div');
+    label1.className = 'item-list-label';
+    label1.textContent = 'Техніка мату';
+    itemListEl.appendChild(label1);
+    ENDGAME_TECHNIQUES.forEach(addItemBtn);
+    const label2 = document.createElement('div');
+    label2.className = 'item-list-label';
+    label2.textContent = 'Пішакові ендшпілі й опозиція';
+    itemListEl.appendChild(label2);
+    ENDGAME_PUZZLES.forEach(addItemBtn);
+  } else if(currentTab === 'tactics'){
+    renderDifficultyFilter();
+    const filtered = tacticsFilter === 'all' ? PUZZLES : PUZZLES.filter(p=>p.difficulty===tacticsFilter);
+    if(filtered.length){
+      filtered.forEach(addItemBtn);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'item-list-label';
+      empty.textContent = 'Немає задач цього рівня.';
+      itemListEl.appendChild(empty);
+    }
+  } else if(currentTab === 'openings'){
+    renderStrictnessToggle();
+    renderOpeningsFilter();
+    const rep = loadRepertoire();
+    let filtered = OPENINGS;
+    if(openingsFilter === 'white') filtered = OPENINGS.filter(o=>o.side==='white');
+    else if(openingsFilter === 'black') filtered = OPENINGS.filter(o=>o.side==='black');
+    else if(openingsFilter === 'mine') filtered = OPENINGS.filter(o=>rep[o.id]);
+    if(filtered.length){
+      filtered.forEach(addItemBtn);
+    } else {
+      const empty = document.createElement('div');
+      empty.className = 'item-list-label';
+      empty.textContent = 'У репертуарі поки порожньо — познач ★ біля потрібних дебютів.';
+      itemListEl.appendChild(empty);
+    }
+  } else {
+    items.forEach(addItemBtn);
+  }
+  updateActiveItem();
+  updateStatsLine();
+}
+
+function renderDifficultyFilter(){
+  const filterEl = document.createElement('div');
+  filterEl.className = 'diff-filter';
+  const options = [
+    {key:'all', label:'Всі'},
+    {key:'easy', label:'Легкі'},
+    {key:'medium', label:'Середні'},
+    {key:'hard', label:'Складні'}
+  ];
+  options.forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.className = 'diff-btn' + (tacticsFilter === opt.key ? ' active' : '');
+    const count = opt.key === 'all' ? PUZZLES.length : PUZZLES.filter(p=>p.difficulty===opt.key).length;
+    btn.textContent = `${opt.label} (${count})`;
+    btn.addEventListener('click', ()=>{
+      tacticsFilter = opt.key;
+      renderItemList();
+      const filtered = tacticsFilter === 'all' ? PUZZLES : PUZZLES.filter(p=>p.difficulty===tacticsFilter);
+      if(filtered.length && (!currentPuzzle || !filtered.some(p=>p.id===currentPuzzle.id))){
+        selectPuzzle(filtered[0].id);
+      }
+    });
+    filterEl.appendChild(btn);
+  });
+  itemListEl.appendChild(filterEl);
+}
+
+function renderOpeningsFilter(){
+  const filterEl = document.createElement('div');
+  filterEl.className = 'diff-filter';
+  const options = [
+    {key:'all', label:'Всі'},
+    {key:'white', label:'За білих'},
+    {key:'black', label:'За чорних'},
+    {key:'mine', label:'★ Мій репертуар'}
+  ];
+  options.forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.className = 'diff-btn' + (openingsFilter === opt.key ? ' active' : '');
+    btn.textContent = opt.label;
+    btn.addEventListener('click', ()=>{
+      openingsFilter = opt.key;
+      renderItemList();
+    });
+    filterEl.appendChild(btn);
+  });
+  itemListEl.appendChild(filterEl);
+}
+
+function renderStrictnessToggle(){
+  const filterEl = document.createElement('div');
+  filterEl.className = 'diff-filter';
+  const options = [
+    {key:'strict', label:'🎓 Строго', title:'Суворіша перевірка принципів у вільній частині — краще для новачків'},
+    {key:'soft', label:'♟ М\'яко', title:'М\'якша перевірка: дозволяє ранній вихід ферзя, крайні пішаки й гострі жертви — для досвідченіших'}
+  ];
+  options.forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.className = 'diff-btn' + (strictness === opt.key ? ' active' : '');
+    btn.title = opt.title;
+    btn.textContent = opt.label;
+    btn.addEventListener('click', ()=>{
+      strictness = opt.key;
+      saveStrictness(strictness);
+      renderItemList();
+    });
+    filterEl.appendChild(btn);
+  });
+  itemListEl.appendChild(filterEl);
+}
+
+function updateActiveItem(){
+  const activeId = currentTab === 'openings' ? (currentOpening && currentOpening.id) : currentTab === 'endgames' ? (currentEndgameItem && currentEndgameItem.id) : currentTab === 'cct' ? (currentCCT && currentCCT.id) : (currentPuzzle && currentPuzzle.id);
+  itemListEl.querySelectorAll('.item-btn').forEach(b=>{
+    b.classList.toggle('active', b.dataset.id === activeId);
+  });
+}
+
+function updateStatsLine(){
+  const opProg = loadProgress(PROG_KEY_OPENINGS);
+  const tacProg = loadProgress(PROG_KEY_TACTICS);
+  const egProg = loadProgress(PROG_KEY_ENDGAMES);
+  const cctProg = loadProgress(PROG_KEY_CCT);
+  const opDone = Object.values(opProg).filter(isDone).length;
+  const tacDone = Object.values(tacProg).filter(isDone).length;
+  const egDone = Object.values(egProg).filter(isDone).length;
+  const cctDone = Object.values(cctProg).filter(isDone).length;
+  const dueTotal = countDue(PROG_KEY_OPENINGS, OPENINGS) + countDue(PROG_KEY_TACTICS, PUZZLES) + countDue(PROG_KEY_ENDGAMES, ENDGAMES) + countDue(PROG_KEY_CCT, CCT_PUZZLES);
+  const streakHtml = streak > 0 ? ` · Серія: <strong class="streak">${streak} 🔥</strong>` : '';
+  const dueHtml = dueTotal > 0 ? ` · На повторення: <strong class="streak">${dueTotal} ↻</strong>` : '';
+  statsLine.innerHTML = `Дебюти вивчено: <strong>${opDone}/${OPENINGS.length}</strong> · Задачі розв'язано: <strong>${tacDone}/${PUZZLES.length}</strong> · CCT: <strong>${cctDone}/${CCT_PUZZLES.length}</strong> · Ендшпілі: <strong>${egDone}/${ENDGAMES.length}</strong>${dueHtml}${streakHtml}`;
+}
+
+/* ===================== ПРОСТИЙ РУШІЙ (МІНІМАКС) ===================== */
+
+const ENGINE_DEPTH = 2; // скільки півходів рушій прораховує наперед — свідомо небагато, щоб залишатись «слабким» і швидким
+const PIECE_VALUES = {p:100, n:320, b:330, r:500, q:900, k:0};
+
+// Прості таблиці позиційних бонусів (заохочують централізацію), рядок 0 = 8-ма горизонталь
+const PAWN_PST = [
+  [0,0,0,0,0,0,0,0],
+  [50,50,50,50,50,50,50,50],
+  [10,10,20,30,30,20,10,10],
+  [5,5,10,25,25,10,5,5],
+  [0,0,0,20,20,0,0,0],
+  [5,-5,-10,0,0,-10,-5,5],
+  [5,10,10,-20,-20,10,10,5],
+  [0,0,0,0,0,0,0,0],
+];
+const KNIGHT_PST = [
+  [-50,-40,-30,-30,-30,-30,-40,-50],
+  [-40,-20,0,0,0,0,-20,-40],
+  [-30,0,10,15,15,10,0,-30],
+  [-30,5,15,20,20,15,5,-30],
+  [-30,0,15,20,20,15,0,-30],
+  [-30,5,10,15,15,10,5,-30],
+  [-40,-20,0,5,5,0,-20,-40],
+  [-50,-40,-30,-30,-30,-30,-40,-50],
+];
+
+function evaluateBoard(){
+  const board = chess.board(); // board[0] = 8-ма горизонталь ... board[7] = 1-ша
+  let score = 0;
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const sq = board[r][c];
+      if(!sq) continue;
+      let val = PIECE_VALUES[sq.type] || 0;
+      const pstRow = sq.color === 'w' ? r : 7-r;
+      if(sq.type === 'p') val += PAWN_PST[pstRow][c];
+      if(sq.type === 'n') val += KNIGHT_PST[pstRow][c];
+      score += sq.color === 'w' ? val : -val;
+    }
+  }
+  return score;
+}
+
+function orderedVerboseMoves(){
+  const moves = chess.moves({verbose:true});
+  moves.sort((a,b)=>{
+    const av = a.captured ? (PIECE_VALUES[a.captured]||0) : 0;
+    const bv = b.captured ? (PIECE_VALUES[b.captured]||0) : 0;
+    return bv - av;
+  });
+  return moves;
+}
+
+function minimax(depth, alpha, beta, maximizing){
+  if(depth === 0 || chess.game_over()){
+    return evaluateBoard();
+  }
+  const moves = orderedVerboseMoves();
+  if(moves.length === 0) return evaluateBoard();
+  if(maximizing){
+    let best = -Infinity;
+    for(const m of moves){
+      chess.move(m.san);
+      best = Math.max(best, minimax(depth-1, alpha, beta, false));
+      chess.undo();
+      alpha = Math.max(alpha, best);
+      if(beta <= alpha) break;
+    }
+    return best;
+  } else {
+    let best = Infinity;
+    for(const m of moves){
+      chess.move(m.san);
+      best = Math.min(best, minimax(depth-1, alpha, beta, true));
+      chess.undo();
+      beta = Math.min(beta, best);
+      if(beta <= alpha) break;
+    }
+    return best;
+  }
+}
+
+// Оцінює ВСІ легальні ходи в поточній позиції на глибину рушія. Повертає й
+// саму оцінку кожного ходу — потрібно і для вибору ходу рушія, і для аналізу
+// того, наскільки хід гравця в принциповій частині відхилявся від найкращого.
+function scoreAllMoves(){
+  const moves = orderedVerboseMoves();
+  const maximizing = chess.turn() === 'w';
+  const scored = moves.map(m=>{
+    chess.move(m.san);
+    const score = minimax(ENGINE_DEPTH - 1, -Infinity, Infinity, !maximizing);
+    chess.undo();
+    return {move: m, score};
+  });
+  return {scored, maximizing};
+}
+
+function bestMoveAndScore(){
+  const {scored, maximizing} = scoreAllMoves();
+  if(scored.length === 0) return null;
+  let bestScore = maximizing ? -Infinity : Infinity;
+  scored.forEach(s=>{
+    if(maximizing ? s.score > bestScore : s.score < bestScore) bestScore = s.score;
+  });
+  const bestMoves = scored.filter(s=>s.score === bestScore).map(s=>s.move);
+  return {
+    move: bestMoves[Math.floor(Math.random() * bestMoves.length)],
+    score: bestScore,
+    maximizing,
+    scored
+  };
+}
+
+function getEngineMove(){
+  const result = bestMoveAndScore();
+  return result ? result.move : null;
+}
+
+function enterFreePlay(){
+  freePlay = true;
+  freePlayBox.style.display = 'none';
+  moveCommentBox.style.display = 'none';
+  if(chess.turn() === userColor){
+    setStatus('Гра проти комп\'ютера. Твій хід.', '');
+  } else {
+    setStatus('Гра проти комп\'ютера. Хід суперника...', 'engine-thinking');
+    setTimeout(engineFreePlayMove, 350);
+  }
+}
+
+function engineFreePlayMove(){
+  if(!freePlay && !principleMode) return;
+  const mv = getEngineMove();
+  if(!mv){ announceGameOver(); return; }
+  const played = chess.move(mv.san);
+  lastMove = played;
+  renderBoard();
+  renderMoveList();
+  if(chess.game_over()){
+    announceGameOver();
+  } else {
+    setStatus('Твій хід.', '');
+  }
+}
+
+function announceGameOver(){
+  if(chess.in_checkmate()){
+    const mated = chess.turn();
+    if(mated === userColor){
+      setStatus('Мат. Цього разу переміг комп\'ютер — спробуй ще раз!', 'err');
+    } else {
+      setStatus('Мат! Ти переміг комп\'ютера 🎉', 'win');
+      if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'technique'){
+        markCompleted(PROG_KEY_ENDGAMES, currentEndgameItem.id);
+        renderItemList();
+      }
+    }
+  } else if(chess.in_stalemate()){
+    setStatus('Пат — нічия.', '');
+  } else if(chess.in_threefold_repetition()){
+    setStatus('Нічия через повторення позиції.', '');
+  } else if(chess.insufficient_material()){
+    setStatus('Нічия — недостатньо матеріалу для мату.', '');
+  } else if(chess.in_draw()){
+    setStatus('Нічия.', '');
+  } else {
+    setStatus('Гру завершено.', '');
+  }
+
+  if(currentTab === 'openings' && principleMode && principleMoveLog.length){
+    explainBox.style.display = 'block';
+    explainBox.innerHTML = renderPrincipleAnalysisHtml();
+  }
+}
+
+playVsEngineBtn.addEventListener('click', enterFreePlay);
+analysisBtn.addEventListener('click', ()=>{
+  explainBox.style.display = 'block';
+  explainBox.innerHTML = renderPrincipleAnalysisHtml();
+});
+
+/* ===================== ПРИНЦИПИ ДЕБЮТУ (вільна частина після обов'язкової лінії) =====================
+   Обов'язкова частина дебюту (currentOpening.coreMoves повних ходів) вимагає точний хід із заданої
+   лінії. Далі — принципова частина: приймається будь-який легальний хід, який не порушує явно
+   базові принципи розвитку, боротьби за центр і безпеки короля; сам "правильний" хід більше не
+   один-єдиний. Перевірка навмисно лагідна: заборонені лише явні помилки, а не будь-яке
+   відхилення від "ідеальної" теорії. */
+
+function openingCoreHalfMoves(op){
+  const core = (op.coreMoves || Math.ceil(op.moves.length / 2)) * 2;
+  return Math.min(core, op.moves.length);
+}
+
+function findKingSquare(color, src){
+  const board = (src || chess).board();
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const sq = board[r][c];
+      if(sq && sq.type === 'k' && sq.color === color){
+        return 'abcdefgh'[c] + (8 - r);
+      }
+    }
+  }
+  return null;
+}
+
+function homeMinorSquares(color){
+  return color === 'w' ? ['b1','c1','f1','g1'] : ['b8','c8','f8','g8'];
+}
+
+function countDevelopedMinors(color, src){
+  const c = src || chess;
+  let developed = 0;
+  homeMinorSquares(color).forEach(sq=>{
+    const piece = c.get(sq);
+    const expectedType = (sq[0] === 'b' || sq[0] === 'g') ? 'n' : 'b';
+    if(!piece || piece.type !== expectedType || piece.color !== color){
+      developed++;
+    }
+  });
+  return developed;
+}
+
+function kingShelterSquares(color, kingSquare){
+  if(color === 'w'){
+    if(kingSquare === 'g1') return ['f2','g2','h2'];
+    if(kingSquare === 'c1') return ['a2','b2','c2'];
+  } else {
+    if(kingSquare === 'g8') return ['f7','g7','h7'];
+    if(kingSquare === 'c8') return ['a7','b7','c7'];
+  }
+  return [];
+}
+
+// Дуже спрощена перевірка "чи зависає фігура без компенсації": якщо після ходу
+// суперник одразу може забрати щойно переміщену фігуру (вартістю не нижче
+// заданого порогу), а відповісти взяттям на тому ж полі нема чим — це явний ляп.
+function wouldHangPiece(candidate, threshold){
+  const lostValue = PIECE_VALUES[candidate.piece] || 0;
+  if(lostValue < (threshold || 300)) return false;
+  const temp = new Chess(chess.fen());
+  const played = temp.move(candidate.san);
+  if(!played) return false;
+  const opponentCaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
+  if(opponentCaptures.length === 0) return false;
+  temp.move(opponentCaptures[0].san);
+  const ourRecaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
+  return ourRecaptures.length === 0;
+}
+
+// Ненав'язливі підказки на позицію ПІСЛЯ ходу — не блокують хід, лише
+// додаються до статусного повідомлення.
+function getPositionAdvisories(color, src){
+  const c = src || chess;
+  const advisories = [];
+  const plyCount = c.history().length;
+
+  const kingSq = findKingSquare(color, c);
+  const homeKingSq = color === 'w' ? 'e1' : 'e8';
+  if(kingSq === homeKingSq && plyCount >= 16){
+    advisories.push('Король досі в центрі — подумай про рокіровку.');
+  }
+
+  const homeRank = color === 'w' ? '2' : '7';
+  const centerPawnMoved = ['d','e'].some(file=>{
+    const piece = c.get(file + homeRank);
+    return !piece || piece.type !== 'p' || piece.color !== color;
+  });
+  if(!centerPawnMoved && plyCount >= 10){
+    advisories.push('Жоден центральний пішак (d/e) ще не зрушив — варто поборотися за центр.');
+  }
+
+  return advisories;
+}
+
+function evaluatePrincipleMove(candidate){
+  const mover = candidate.color;
+  const soft = strictness === 'soft';
+
+  if(wouldHangPiece(candidate, soft ? 500 : 300)){
+    return {ok:false, reason:'Цей хід залишає фігуру під боєм без жодної компенсації — перевір безпеку фігур.'};
+  }
+
+  const givesCheck = candidate.san.indexOf('+') !== -1 || candidate.san.indexOf('#') !== -1;
+  const minDevForQueen = soft ? 1 : 2;
+  if(candidate.piece === 'q' && !candidate.captured && !givesCheck && countDevelopedMinors(mover) < minDevForQueen){
+    return {ok:false, reason:'Зарано виводити ферзя — спершу розвинь коней і слонів.'};
+  }
+
+  if(!soft){
+    const isRookPawnDoubleStep = candidate.piece === 'p' && !candidate.captured &&
+      (candidate.from[0] === 'a' || candidate.from[0] === 'h') &&
+      Math.abs(parseInt(candidate.to[1],10) - parseInt(candidate.from[1],10)) === 2;
+    if(isRookPawnDoubleStep && countDevelopedMinors(mover) < 3){
+      return {ok:false, reason:'Крайній пішак рідко вартий ходу так рано — краще розвинь фігуру або поборись за центр (e/d).'};
+    }
+
+    const kingSquare = findKingSquare(mover);
+    const shelter = kingShelterSquares(mover, kingSquare);
+    if(candidate.piece === 'p' && !candidate.captured && shelter.includes(candidate.from)){
+      return {ok:false, reason:'Не варто без потреби рухати пішаки прикриття власного короля.'};
+    }
+  }
+
+  const temp = new Chess(chess.fen());
+  const played = temp.move(candidate.san);
+  const advisories = played ? getPositionAdvisories(mover, temp) : [];
+  return {ok:true, warning: advisories.length ? advisories.join(' ') : null};
+}
+
+// Записує, наскільки хід гравця у вільній частині відхилявся від найкращого
+// ходу, який знайшов рушій у тій самій позиції (той самий пошук, що й для
+// ходу суперника) — щоб під кінець партії показати коротке резюме.
+function logPrincipleMove(candidate, analysis){
+  if(!analysis) return;
+  const playedEntry = analysis.scored.find(s => s.move.san === candidate.san);
+  const playedScore = playedEntry ? playedEntry.score : analysis.score;
+  const lossCp = analysis.maximizing
+    ? Math.max(0, analysis.score - playedScore)
+    : Math.max(0, playedScore - analysis.score);
+  principleMoveLog.push({
+    moveNo: Math.ceil(chess.history().length / 2),
+    san: candidate.san,
+    lossCp,
+    bestSan: (lossCp > 0 && analysis.move.san !== candidate.san) ? analysis.move.san : null
+  });
+  analysisBtnBox.style.display = 'block';
+}
+
+function classifyMoveLoss(lossCp){
+  if(lossCp <= 0) return 'best';
+  if(lossCp <= 50) return 'good';
+  if(lossCp <= 150) return 'inaccuracy';
+  return 'mistake';
+}
+
+// Коротке резюме вільної частини — скільки ходів рушій вважав найкращими чи
+// прийнятними і де були найпомітніші відхилення за оцінкою. Викликається,
+// коли партія справді завершується (мат/пат/нічия).
+function renderPrincipleAnalysisHtml(){
+  if(!principleMoveLog.length) return '';
+  const counts = {best:0, good:0, inaccuracy:0, mistake:0};
+  principleMoveLog.forEach(m => { counts[classifyMoveLoss(m.lossCp)]++; });
+  const worst = principleMoveLog
+    .filter(m => m.lossCp > 0)
+    .slice()
+    .sort((a,b) => b.lossCp - a.lossCp)
+    .slice(0, 3);
+  let html = `<div class="theory" style="margin-top:14px;">
+    <h3>Аналіз вільної частини (${principleMoveLog.length} ${principleMoveLog.length === 1 ? 'хід' : 'ходів'})</h3>
+    <p class="idea">Найкращих ходів рушія: ${counts.best} · хороших: ${counts.good} · неточностей: ${counts.inaccuracy} · помилок: ${counts.mistake}.</p>`;
+  if(worst.length){
+    html += `<div class="plans-col"><h4>Найпомітніші відхилення від рушія</h4><ul>${worst.map(m =>
+      `<li>${m.moveNo}. ${m.san} — втрата ≈ ${(m.lossCp/100).toFixed(2)} пішака${m.bestSan ? ` (краще було ${m.bestSan})` : ''}</li>`
+    ).join('')}</ul></div>`;
+  } else {
+    html += `<p class="idea">Жодного помітного відхилення від найкращого ходу рушія — чудова робота!</p>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+/* ===================== ДЕБЮТИ ===================== */
+
+function selectOpening(id){
+  clearReplayTimers();
+  if(dragActive){ cleanupDrag(); }
+  currentOpening = OPENINGS.find(o=>o.id===id);
+  chess = new Chess();
+  moveIndex = 0;
+  freePlay = false;
+  principleMode = false;
+  principleMoveLog = [];
+  analysisBtnBox.style.display = 'none';
+  userColor = currentOpening.side === 'white' ? 'w' : 'b';
+  flipped = userColor === 'b';
+  selected = null; legalTargets = []; lastMove = null;
+  hintBox.style.display = 'none';
+  explainBox.style.display = 'none';
+  moveCommentBox.style.display = 'none';
+  freePlayBox.style.display = 'none';
+  updateActiveItem();
+
+  renderOpeningHeader();
+  renderBoard();
+  renderMoveList();
+  setStatus(`Твій хід. Спробуй знайти правильний перший хід ${currentOpening.side === 'white' ? 'білими' : 'чорними'}.`, '');
+
+  if(userColor === 'b'){
+    setTimeout(engineAutoPlay, 400);
+  }
+}
+
+function renderOpeningHeader(){
+  const op = currentOpening;
+  const t = op.theory;
+  let html = `
+    <div class="eco">${op.eco} · ${op.side === 'white' ? 'граєш за білих' : 'граєш за чорних'} · обов'язкова частина: ${op.coreMoves} ${op.coreMoves === 1 ? 'хід' : 'ходів'}</div>
+    <h2>${op.name}</h2>
+    <p>${op.description}</p>
+    <p class="hint-text" style="margin-top:0;">Перші ${op.coreMoves} ходів — точна лінія теорії. Далі приймається будь-який хід, що не порушує принципи розвитку, боротьби за центр і безпеки короля.</p>
+    <button class="btn line-btn" data-line-kind="preview" data-line-index="-1">▶ Переглянути дебют на дошці</button>`;
+
+  if(t){
+    html += `<div class="theory">
+      <h3>Ідея дебюту</h3>
+      <p class="idea">${t.idea}</p>
+      <div class="plans-grid">
+        <div class="plans-col">
+          <h4>Плани білих</h4>
+          <ul>${t.plansWhite.map(p=>`<li>${p}</li>`).join('')}</ul>
+        </div>
+        <div class="plans-col">
+          <h4>Плани чорних</h4>
+          <ul>${t.plansBlack.map(p=>`<li>${p}</li>`).join('')}</ul>
+        </div>
+      </div>`;
+    if(t.trap){
+      html += `<div class="trap-box">
+        <div class="trap-name">Пастка: ${t.trap.name}</div>
+        <p>${t.trap.note}</p>
+        <button class="btn line-btn" data-line-kind="trap" data-line-index="0">Показати на дошці</button>
+      </div>`;
+    }
+    if(t.variations && t.variations.length){
+      html += `<div class="variations-box">
+        <h4>Варіанти відповіді суперника</h4>
+        ${t.variations.map((v,i)=>`
+          <div class="variation-item">
+            <div class="variation-name">${v.name}</div>
+            <p>${v.note}</p>
+            <button class="btn line-btn" data-line-kind="variation" data-line-index="${i}">Показати на дошці</button>
+          </div>`).join('')}
+      </div>`;
+    }
+    html += `<button class="btn" id="returnTrainBtn" style="display:none;">Повернутись до тренування</button>`;
+    html += `</div>`;
+  }
+  itemHeaderEl.innerHTML = html;
+
+  itemHeaderEl.querySelectorAll('.line-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(isReplaying) return;
+      const kind = btn.dataset.lineKind;
+      if(kind === 'preview'){
+        startLineReplay(op, {name: op.name, moves: op.moves, note: op.description}, 'preview', op.moveComments);
+        return;
+      }
+      const line = kind === 'trap' ? t.trap : t.variations[+btn.dataset.lineIndex];
+      startLineReplay(op, line, kind);
+    });
+  });
+  const returnBtn = document.getElementById('returnTrainBtn');
+  if(returnBtn){
+    returnBtn.addEventListener('click', ()=>selectOpening(op.id));
+  }
+}
+
+function startLineReplay(op, line, kind, comments){
+  clearReplayTimers();
+  isReplaying = true;
+  chess = new Chess();
+  selected = null; legalTargets = []; lastMove = null;
+  explainBox.style.display = 'none';
+  moveCommentBox.style.display = 'none';
+  renderBoard();
+  renderMoveList();
+  const introLabel = kind === 'trap' ? 'Перегляд пастки: ' : kind === 'variation' ? 'Перегляд варіанту: ' : 'Перегляд основної лінії: ';
+  setStatus(introLabel + line.name, '');
+
+  const moves = line.moves;
+  moves.forEach((san, i)=>{
+    const timer = setTimeout(()=>{
+      const mv = chess.move(san);
+      if(mv){ lastMove = mv; }
+      renderBoard();
+      renderMoveList();
+      if(comments){ showMoveComment(op, i); }
+      if(i === moves.length - 1){
+        isReplaying = false;
+        const finishMsg = kind === 'trap' ? 'Ось так спрацьовує пастка.' : kind === 'variation' ? 'Ось так може розвиватися ця лінія.' : 'Ось так виглядає основна лінія. Тепер спробуй пройти її сам!';
+        setStatus(finishMsg, 'win');
+        if(!comments){
+          explainBox.style.display = 'block';
+          explainBox.textContent = line.note;
+        }
+        const returnBtn = document.getElementById('returnTrainBtn');
+        if(returnBtn) returnBtn.style.display = 'inline-block';
+      }
+    }, (i+1) * 650);
+    replayTimers.push(timer);
+  });
+}
+
+function engineAutoPlay(){
+  if(!currentOpening) return;
+  const coreLen = openingCoreHalfMoves(currentOpening);
+  if(moveIndex >= coreLen){
+    engineFreePlayMove();
+    return;
+  }
+  const playedIndex = moveIndex;
+  const san = currentOpening.moves[moveIndex];
+  const mv = chess.move(san);
+  if(!mv) return;
+  lastMove = mv;
+  moveIndex++;
+  renderBoard();
+  renderMoveList();
+  showMoveComment(currentOpening, playedIndex);
+  if(moveIndex >= coreLen){
+    finishOpening();
+  } else {
+    setStatus('Твій хід.', '');
+  }
+}
+
+function showMoveComment(op, idx){
+  const comment = op.moveComments && op.moveComments[idx];
+  if(comment){
+    moveCommentBox.style.display = 'block';
+    moveCommentBox.textContent = comment;
+  } else {
+    moveCommentBox.style.display = 'none';
+  }
+}
+
+function finishOpening(){
+  principleMode = true;
+  principleMoveLog = [];
+  markCompleted(PROG_KEY_OPENINGS, currentOpening.id);
+  renderItemList();
+  freePlayBox.style.display = 'block';
+  if(chess.turn() === userColor){
+    setStatus('Обов\'язкову частину дебюту пройдено! Тепер продовжуй сам за принципами: розвиток фігур, боротьба за центр, безпека короля.', 'win');
+  } else {
+    setStatus('Обов\'язкову частину дебюту пройдено! Хід суперника...', 'win');
+    setTimeout(engineFreePlayMove, 500);
+  }
+}
+
+/* ===================== ТАКТИКА ===================== */
+
+function selectPuzzle(id){
+  clearReplayTimers();
+  if(dragActive){ cleanupDrag(); }
+  currentPuzzle = PUZZLES.find(p=>p.id===id);
+  chess = new Chess(currentPuzzle.fen);
+  puzzleSolved = false;
+  freePlay = false;
+  flipped = false;
+  selected = null; legalTargets = []; lastMove = null;
+  hintBox.style.display = 'none';
+  hintBox.textContent = currentPuzzle.hint;
+  explainBox.style.display = 'none';
+  freePlayBox.style.display = 'none';
+  analysisBtnBox.style.display = 'none';
+  updateActiveItem();
+
+  const diffLabel = currentPuzzle.difficulty ? ` · рівень: ${DIFFICULTY_LABELS[currentPuzzle.difficulty]}` : '';
+  itemHeaderEl.innerHTML = `
+    <div class="eco">Тактична задача · ${chess.turn() === 'w' ? 'хід білих' : 'хід чорних'}${diffLabel}</div>
+    <h2>${currentPuzzle.theme}</h2>
+    <p>Знайди найсильніший хід у цій позиції.</p>`;
+
+  renderBoard();
+  renderMoveList();
+  setStatus('Знайди найкращий хід.', '');
+}
+
+function normalizeSan(s){
+  return s.replace(/[+#]/g,'');
+}
+
+function finishPuzzle(){
+  puzzleSolved = true;
+  streak++;
+  markCompleted(PROG_KEY_TACTICS, currentPuzzle.id);
+  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
+  explainBox.style.display = 'block';
+  explainBox.textContent = currentPuzzle.explanation;
+  renderItemList();
+}
+
+/* ===================== CCT: ШАХИ · ВЗЯТТЯ · ЗАГРОЗИ ===================== */
+
+function selectCCT(id){
+  clearReplayTimers();
+  if(dragActive){ cleanupDrag(); }
+  currentCCT = CCT_PUZZLES.find(c=>c.id===id);
+  chess = new Chess(currentCCT.fen);
+  cctSolved = false;
+  freePlay = false;
+  flipped = false;
+  selected = null; legalTargets = [];
+  lastMove = currentCCT.lastMove || null; // лише для підсвітки ходу суперника
+  hintBox.style.display = 'none';
+  hintBox.textContent = currentCCT.hint;
+  explainBox.style.display = 'none';
+  freePlayBox.style.display = 'none';
+  analysisBtnBox.style.display = 'none';
+  updateActiveItem();
+
+  const cl = currentCCT.checklist;
+  itemHeaderEl.innerHTML = `
+    <div class="eco">Тренування CCT · суперник щойно зіграв ${currentCCT.lastMove ? (currentCCT.lastMove.from + '–' + currentCCT.lastMove.to) : 'хід'}</div>
+    <h2>${currentCCT.theme}</h2>
+    <p>Перш ніж шукати хід, пройди чекліст: чи є шахи, чи є взяття, і що змінилося після останнього ходу суперника.</p>
+    <div class="cct-box">
+      <h4>Чекліст CCT</h4>
+      <div class="cct-step">
+        <button class="btn cct-step-btn" data-step="checks">Крок 1: Шахи?</button>
+        <div class="cct-answer" data-answer="checks">${cl.checks}</div>
+      </div>
+      <div class="cct-step">
+        <button class="btn cct-step-btn" data-step="captures">Крок 2: Взяття?</button>
+        <div class="cct-answer" data-answer="captures">${cl.captures}</div>
+      </div>
+      <div class="cct-step">
+        <button class="btn cct-step-btn" data-step="threats">Крок 3: Загрози?</button>
+        <div class="cct-answer" data-answer="threats">${cl.threats}</div>
+      </div>
+    </div>`;
+
+  itemHeaderEl.querySelectorAll('.cct-step-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const answer = itemHeaderEl.querySelector(`.cct-answer[data-answer="${btn.dataset.step}"]`);
+      answer.classList.toggle('shown');
+    });
+  });
+
+  renderBoard();
+  renderMoveList();
+  setStatus('Пройди CCT-чекліст, тоді знайди найкращий хід.', '');
+}
+
+function finishCCT(){
+  cctSolved = true;
+  streak++;
+  markCompleted(PROG_KEY_CCT, currentCCT.id);
+  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
+  explainBox.style.display = 'block';
+  explainBox.textContent = currentCCT.explanation;
+  renderItemList();
+}
+
+/* ===================== ЕНДШПІЛІ ===================== */
+
+function selectEndgame(id){
+  clearReplayTimers();
+  if(dragActive){ cleanupDrag(); }
+  currentEndgameItem = ENDGAMES.find(e=>e.id===id);
+  endgamePuzzleSolved = false;
+  selected = null; legalTargets = []; lastMove = null;
+  hintBox.style.display = 'none';
+  explainBox.style.display = 'none';
+  moveCommentBox.style.display = 'none';
+  freePlayBox.style.display = 'none';
+  analysisBtnBox.style.display = 'none';
+
+  if(currentEndgameItem.kind === 'technique'){
+    chess = new Chess(currentEndgameItem.startFen);
+    freePlay = true;
+    userColor = chess.turn();
+    flipped = userColor === 'b';
+    hintBox.textContent = currentEndgameItem.theory.idea;
+
+    const t = currentEndgameItem.theory;
+    itemHeaderEl.innerHTML = `
+      <div class="eco">Техніка мату</div>
+      <h2>${currentEndgameItem.name}</h2>
+      <p>${currentEndgameItem.description}</p>
+      <div class="theory">
+        <h3>Ідея</h3>
+        <p class="idea">${t.idea}</p>
+        <div class="plans-grid">
+          <div class="plans-col">
+            <h4>Кроки техніки</h4>
+            <ul>${t.plansWhite.map(p=>`<li>${p}</li>`).join('')}</ul>
+          </div>
+          <div class="plans-col">
+            <h4>Що робитиме комп'ютер</h4>
+            <ul>${t.plansBlack.map(p=>`<li>${p}</li>`).join('')}</ul>
+          </div>
+        </div>
+      </div>`;
+
+    renderBoard();
+    renderMoveList();
+    setStatus('Постав мат самотньому королю. Твій хід — суперник (комп\'ютер) захищатиметься.', '');
+  } else {
+    chess = new Chess(currentEndgameItem.fen);
+    freePlay = false;
+    userColor = chess.turn();
+    flipped = false;
+    hintBox.textContent = currentEndgameItem.hint;
+
+    itemHeaderEl.innerHTML = `
+      <div class="eco">Пішаковий ендшпіль · ${chess.turn() === 'w' ? 'хід білих' : 'хід чорних'}</div>
+      <h2>${currentEndgameItem.theme}</h2>
+      <p>Знайди єдиний хід, що зберігає результат у цій позиції.</p>`;
+
+    renderBoard();
+    renderMoveList();
+    setStatus('Знайди правильний хід.', '');
+  }
+
+  updateActiveItem();
+}
+
+function finishEndgamePuzzle(){
+  endgamePuzzleSolved = true;
+  streak++;
+  markCompleted(PROG_KEY_ENDGAMES, currentEndgameItem.id);
+  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
+  explainBox.style.display = 'block';
+  explainBox.textContent = currentEndgameItem.explanation;
+  renderItemList();
+}
+
+/* ===================== ДОШКА ===================== */
+
+function renderBoard(){
+  boardEl.innerHTML = '';
+  const board = chess.board(); // board[0] = rank8 ... board[7] = rank1
+  const files = ['a','b','c','d','e','f','g','h'];
+
+  for(let displayRow=0; displayRow<8; displayRow++){
+    for(let displayCol=0; displayCol<8; displayCol++){
+      const rowIdx = flipped ? 7-displayRow : displayRow;
+      const colIdx = flipped ? 7-displayCol : displayCol;
+      const file = files[colIdx];
+      const rank = 8 - rowIdx;
+      const squareName = file + rank;
+      const piece = board[rowIdx][colIdx];
+
+      const sqEl = document.createElement('div');
+      const isLight = (rowIdx + colIdx) % 2 === 0;
+      sqEl.className = 'sq ' + (isLight ? 'light' : 'dark');
+      sqEl.dataset.square = squareName;
+
+      if(selected === squareName) sqEl.classList.add('selected');
+      if(legalTargets.includes(squareName)){
+        sqEl.classList.add('legal');
+        if(piece) sqEl.classList.add('has-piece');
+      }
+      if(lastMove && (lastMove.from === squareName)) sqEl.classList.add('last-from');
+      if(lastMove && (lastMove.to === squareName)) sqEl.classList.add('last-to');
+
+      if(piece){
+        const span = document.createElement('span');
+        span.className = 'piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
+        if(dragActive && dragFromSquare === squareName) span.classList.add('dragging-source');
+        span.textContent = pieceGlyph(piece);
+        sqEl.appendChild(span);
+      }
+
+      sqEl.addEventListener('pointerdown', (e)=>onSquarePointerDown(e, squareName));
+      boardEl.appendChild(sqEl);
+    }
+  }
+}
+
+function pieceGlyph(piece){
+  const whiteGlyphs = {p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'};
+  const blackGlyphs = {p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
+  return piece.color === 'w' ? whiteGlyphs[piece.type] : blackGlyphs[piece.type];
+}
+
+function renderMoveList(){
+  const history = chess.history();
+  if(history.length === 0){ moveListEl.textContent = 'Ходів ще не було.'; return; }
+  let out = '';
+  for(let i=0;i<history.length;i+=2){
+    const num = i/2 + 1;
+    out += num + '. ' + history[i] + (history[i+1] ? ' ' + history[i+1] + '  ' : '');
+  }
+  moveListEl.textContent = out.trim();
+}
+
+function setStatus(msg, kind){
+  statusEl.textContent = msg;
+  statusEl.className = 'status-msg' + (kind ? ' ' + kind : '');
+}
+
+/* ===================== ВЗАЄМОДІЯ З ДОШКОЮ ===================== */
+
+function onSquarePointerDown(e, squareName){
+  if(isReplaying) return;
+  if(currentTab === 'tactics' && puzzleSolved) return;
+  if(currentTab === 'cct' && cctSolved) return;
+  if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return;
+  if(currentTab === 'openings' && !freePlay && !principleMode && (!currentOpening || moveIndex >= currentOpening.moves.length)) return;
+  if(currentTab === 'openings' && chess.turn() !== userColor) return;
+
+  const piece = chess.get(squareName);
+
+  if(selected){
+    if(legalTargets.includes(squareName)){
+      attemptMove(selected, squareName);
+      return;
+    }
+    if(piece && piece.color === chess.turn()){
+      selectSquare(squareName);
+      beginDrag(e, squareName, piece);
+      return;
+    }
+    selected = null; legalTargets = [];
+    renderBoard();
+    return;
+  }
+
+  if(piece && piece.color === chess.turn()){
+    selectSquare(squareName);
+    beginDrag(e, squareName, piece);
+  }
+}
+
+function beginDrag(e, squareName, piece){
+  if(e.pointerType === 'mouse' && e.button !== 0) return;
+  e.preventDefault();
+  dragActive = true;
+  dragMoved = false;
+  dragFromSquare = squareName;
+  dragPointerId = e.pointerId;
+  dragStartX = e.clientX;
+  dragStartY = e.clientY;
+
+  dragGhostEl = document.createElement('div');
+  dragGhostEl.className = 'drag-ghost piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
+  dragGhostEl.textContent = pieceGlyph(piece);
+  dragGhostEl.style.left = e.clientX + 'px';
+  dragGhostEl.style.top = e.clientY + 'px';
+  dragGhostEl.style.visibility = 'hidden';
+  document.body.appendChild(dragGhostEl);
+
+  renderBoard();
+
+  const originEl = boardEl.querySelector('.sq[data-square="' + squareName + '"] .piece');
+  if(originEl){ dragGhostEl.style.fontSize = getComputedStyle(originEl).fontSize; }
+}
+
+function updateDragHover(clientX, clientY){
+  boardEl.querySelectorAll('.sq.drag-hover').forEach(el=>el.classList.remove('drag-hover'));
+  const el = document.elementFromPoint(clientX, clientY);
+  const sqEl = el && el.closest ? el.closest('.sq') : null;
+  if(sqEl) sqEl.classList.add('drag-hover');
+}
+
+function cleanupDrag(){
+  dragActive = false;
+  dragMoved = false;
+  dragFromSquare = null;
+  dragPointerId = null;
+  if(dragGhostEl){ dragGhostEl.remove(); dragGhostEl = null; }
+  boardEl.querySelectorAll('.sq.drag-hover').forEach(el=>el.classList.remove('drag-hover'));
+}
+
+document.addEventListener('pointermove', (e)=>{
+  if(!dragActive || e.pointerId !== dragPointerId) return;
+  const dx = e.clientX - dragStartX, dy = e.clientY - dragStartY;
+  if(!dragMoved && Math.hypot(dx, dy) > DRAG_THRESHOLD){
+    dragMoved = true;
+    dragGhostEl.style.visibility = 'visible';
+  }
+  if(dragMoved){
+    dragGhostEl.style.left = e.clientX + 'px';
+    dragGhostEl.style.top = e.clientY + 'px';
+    updateDragHover(e.clientX, e.clientY);
+  }
+});
+
+document.addEventListener('pointerup', (e)=>{
+  if(!dragActive || e.pointerId !== dragPointerId) return;
+  const wasMoved = dragMoved;
+  const fromSquare = dragFromSquare;
+  cleanupDrag();
+  if(!wasMoved) return; // просте виділення клітинки — далі чекаємо звичайного кліку на ціль
+
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const sqEl = el && el.closest ? el.closest('.sq') : null;
+  const toSquare = sqEl ? sqEl.dataset.square : null;
+
+  if(toSquare && legalTargets.includes(toSquare)){
+    attemptMove(fromSquare, toSquare);
+  } else if(toSquare && toSquare !== fromSquare){
+    const piece = chess.get(toSquare);
+    if(piece && piece.color === chess.turn()){
+      selectSquare(toSquare);
+    } else {
+      selected = null; legalTargets = [];
+      renderBoard();
+    }
+  } else {
+    renderBoard();
+  }
+});
+
+document.addEventListener('pointercancel', ()=>{
+  if(!dragActive) return;
+  cleanupDrag();
+  renderBoard();
+});
+
+function selectSquare(squareName){
+  selected = squareName;
+  const moves = chess.moves({square: squareName, verbose:true});
+  legalTargets = moves.map(m=>m.to);
+  renderBoard();
+}
+
+function attemptMove(from, to){
+  const moves = chess.moves({square: from, verbose:true});
+  const candidate = moves.find(m=>m.to === to);
+  selected = null; legalTargets = [];
+  if(!candidate){ renderBoard(); return; }
+
+  if(currentTab === 'openings'){
+    if(freePlay){
+      const mv = chess.move(candidate);
+      lastMove = mv;
+      renderBoard();
+      renderMoveList();
+      if(chess.game_over()){
+        announceGameOver();
+      } else {
+        setStatus('Хід суперника (комп\'ютер думає...)', 'engine-thinking');
+        setTimeout(engineFreePlayMove, 300);
+      }
+      return;
+    }
+    if(principleMode){
+      const verdict = evaluatePrincipleMove(candidate);
+      if(verdict.ok){
+        const analysis = bestMoveAndScore(); // оцінка позиції ДО ходу гравця
+        const mv = chess.move(candidate);
+        lastMove = mv;
+        logPrincipleMove(candidate, analysis);
+        renderBoard();
+        renderMoveList();
+        if(chess.game_over()){
+          announceGameOver();
+        } else {
+          const warnSuffix = verdict.warning ? ' ⚠ ' + verdict.warning : '';
+          setStatus('Хороший хід!' + warnSuffix + ' Хід суперника (комп\'ютер думає...)', warnSuffix ? 'warn' : 'ok');
+          setTimeout(engineFreePlayMove, 300);
+        }
+      } else {
+        renderBoard();
+        setStatus(verdict.reason, 'err');
+      }
+      return;
+    }
+    const coreLen = openingCoreHalfMoves(currentOpening);
+    const expected = currentOpening.moves[moveIndex];
+    if(candidate.san === expected){
+      const playedIndex = moveIndex;
+      const mv = chess.move(candidate);
+      lastMove = mv;
+      moveIndex++;
+      renderBoard();
+      renderMoveList();
+      showMoveComment(currentOpening, playedIndex);
+      if(moveIndex >= coreLen){
+        finishOpening();
+      } else {
+        setStatus('Правильно! Хід суперника...', 'ok');
+        setTimeout(engineAutoPlay, 500);
+      }
+    } else {
+      renderBoard();
+      setStatus('Це не той хід у цій лінії. Спробуй ще раз.', 'err');
+    }
+  } else if(currentTab === 'endgames'){
+    if(currentEndgameItem.kind === 'technique'){
+      const mv = chess.move(candidate);
+      lastMove = mv;
+      renderBoard();
+      renderMoveList();
+      if(chess.game_over()){
+        announceGameOver();
+      } else {
+        setStatus('Хід суперника (комп\'ютер думає...)', 'engine-thinking');
+        setTimeout(engineFreePlayMove, 300);
+      }
+    } else {
+      if(currentEndgameItem.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+        const mv = chess.move(candidate);
+        lastMove = mv;
+        renderBoard();
+        renderMoveList();
+        finishEndgamePuzzle();
+      } else {
+        renderBoard();
+        if(streak > 0){ streak = 0; updateStatsLine(); }
+        setStatus('Не зовсім. Спробуй ще раз.', 'err');
+      }
+    }
+  } else if(currentTab === 'cct'){
+    if(currentCCT.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+      const mv = chess.move(candidate);
+      lastMove = mv;
+      renderBoard();
+      renderMoveList();
+      finishCCT();
+    } else {
+      renderBoard();
+      if(streak > 0){ streak = 0; updateStatsLine(); }
+      setStatus('Не зовсім. Ще раз пройди CCT-чекліст і спробуй ще.', 'err');
+    }
+  } else {
+    if(currentPuzzle.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+      const mv = chess.move(candidate);
+      lastMove = mv;
+      renderBoard();
+      renderMoveList();
+      finishPuzzle();
+    } else {
+      renderBoard();
+      if(streak > 0){ streak = 0; updateStatsLine(); }
+      setStatus('Не зовсім. Спробуй ще раз.', 'err');
+    }
+  }
+}
+
+/* ===================== СТАРТ ===================== */
+
+function init(){
+  renderItemList();
+  selectOpening(OPENINGS[0].id);
+}
+
+if(typeof Chess === 'undefined'){
+  itemHeaderEl.innerHTML = '<p>Не вдалося завантажити бібліотеку chess.js. Перевір з\'єднання з інтернетом і онови сторінку.</p>';
+} else {
+  init();
+}
+</script>
+</body>
+</html>
