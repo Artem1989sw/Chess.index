@@ -535,6 +535,12 @@
           <div class="move-list" id="moveList"></div>
           <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
           <div id="freePlayBox" style="display:none;">
+            <div class="diff-filter" id="engineStrengthRow">
+              <span class="item-list-label" style="margin:0 4px 0 0;opacity:.75;align-self:center;">Суперник:</span>
+              <button class="diff-btn" data-strength="weak">Слабкий</button>
+              <button class="diff-btn" data-strength="medium">Середній (Stockfish)</button>
+              <button class="diff-btn" data-strength="strong">Сильний (Stockfish)</button>
+            </div>
             <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
           </div>
           <div id="analysisBtnBox" style="display:none;margin:4px 0 12px;">
@@ -1050,6 +1056,8 @@ function clearReplayTimers(){
   replayTimers.forEach(t=>clearTimeout(t));
   replayTimers = [];
   isReplaying = false;
+  engineMoveToken++; // інвалідує будь-який хід Stockfish, що ще думає над попередньою позицією
+  engineBusy = false;
 }
 
 const PROG_KEY_OPENINGS = 'chess_trainer_openings_progress_v1';
@@ -1191,6 +1199,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
 });
 document.getElementById('undoBtn').addEventListener('click', ()=>{
   if(isReplaying) return;
+  if(engineBusy) return;
   if(dragActive){ cleanupDrag(); }
   const undone = chess.undo();
   if(!undone) return;
@@ -1566,6 +1575,91 @@ function getEngineMove(){
   return result ? result.move : null;
 }
 
+/* ===================== СИЛЬНИЙ РУШІЙ (STOCKFISH, ОПЦІЙНО) ===================== */
+// Вантажиться лінькувато й лише з CDN, коли гравець сам обере "Середній" чи
+// "Сильний" — щоб ті, кому досить вбудованого мінімаксу, ніколи не платили
+// за завантаження кількамегабайтного файлу.
+
+const STOCKFISH_CDN_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+const ENGINE_STRENGTH_KEY = 'chess_trainer_engine_strength_v1';
+const ENGINE_STRENGTH_MOVETIME = { medium: 600, strong: 2500 }; // мс на хід
+let engineStrength = (function(){
+  try{ return localStorage.getItem(ENGINE_STRENGTH_KEY) || 'weak'; }catch(e){ return 'weak'; }
+})();
+let engineBusy = false; // блокує ходи гравця, поки Stockfish думає
+let engineMoveToken = 0; // інвалідовує "запізнілий" хід Stockfish, якщо гравець тим часом скинув позицію
+let stockfishWorker = null;
+let stockfishReadyPromise = null;
+
+function saveEngineStrength(v){
+  engineStrength = v;
+  try{ localStorage.setItem(ENGINE_STRENGTH_KEY, v); }catch(e){}
+}
+
+function renderEngineStrengthButtons(){
+  document.querySelectorAll('#engineStrengthRow .diff-btn').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.strength === engineStrength);
+  });
+}
+document.querySelectorAll('#engineStrengthRow .diff-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    saveEngineStrength(btn.dataset.strength);
+    renderEngineStrengthButtons();
+  });
+});
+renderEngineStrengthButtons();
+
+// Створює воркер через Blob+importScripts (а не new Worker(cdnUrl) напряму) —
+// так надійніше працює крос-доменне завантаження скрипта в різних браузерах.
+function initStockfish(){
+  if(stockfishReadyPromise) return stockfishReadyPromise;
+  stockfishReadyPromise = new Promise((resolve, reject)=>{
+    try{
+      const blob = new Blob([`importScripts('${STOCKFISH_CDN_URL}');`], {type:'application/javascript'});
+      const worker = new Worker(URL.createObjectURL(blob));
+      const onReady = (e)=>{
+        if(e.data === 'uciok'){ worker.postMessage('isready'); }
+        if(e.data === 'readyok'){
+          worker.removeEventListener('message', onReady);
+          stockfishWorker = worker;
+          resolve(worker);
+        }
+      };
+      worker.addEventListener('message', onReady);
+      worker.addEventListener('error', (e)=> reject(e));
+      worker.postMessage('uci');
+    }catch(err){
+      reject(err);
+    }
+  });
+  return stockfishReadyPromise;
+}
+
+function stockfishGetMove(fen, movetime){
+  return initStockfish().then(worker=>{
+    return new Promise((resolve, reject)=>{
+      const onMessage = (e)=>{
+        const line = e.data;
+        if(typeof line === 'string' && line.startsWith('bestmove')){
+          worker.removeEventListener('message', onMessage);
+          const uci = line.split(' ')[1];
+          if(!uci || uci === '(none)') reject(new Error('Stockfish не знайшов хід'));
+          else resolve(uci);
+        }
+      };
+      worker.addEventListener('message', onMessage);
+      worker.postMessage('position fen ' + fen);
+      worker.postMessage('go movetime ' + movetime);
+    });
+  });
+}
+
+function uciToMoveObject(uci){
+  const move = { from: uci.slice(0,2), to: uci.slice(2,4) };
+  if(uci.length > 4) move.promotion = uci.slice(4,5);
+  return move;
+}
+
 function enterFreePlay(){
   freePlay = true;
   freePlayBox.style.display = 'none';
@@ -1578,11 +1672,8 @@ function enterFreePlay(){
   }
 }
 
-function engineFreePlayMove(){
-  if(!freePlay && !principleMode) return;
-  const mv = getEngineMove();
-  if(!mv){ announceGameOver(); return; }
-  const played = chess.move(mv.san);
+function finishEngineMove(played){
+  if(!played){ announceGameOver(); return; }
   lastMove = played;
   renderBoard();
   renderMoveList();
@@ -1590,6 +1681,32 @@ function engineFreePlayMove(){
     announceGameOver();
   } else {
     setStatus('Твій хід.', '');
+  }
+}
+
+async function engineFreePlayMove(){
+  if(!freePlay && !principleMode) return;
+  if(engineStrength === 'weak'){
+    const mv = getEngineMove();
+    finishEngineMove(mv ? chess.move(mv.san) : null);
+    return;
+  }
+  const token = ++engineMoveToken;
+  const fenBefore = chess.fen();
+  engineBusy = true;
+  setStatus('Хід суперника (Stockfish думає...)', 'engine-thinking');
+  try{
+    const uci = await stockfishGetMove(fenBefore, ENGINE_STRENGTH_MOVETIME[engineStrength]);
+    if(token !== engineMoveToken || chess.fen() !== fenBefore) return; // гравець скинув/змінив позицію, поки Stockfish думав
+    const played = chess.move(uciToMoveObject(uci));
+    engineBusy = false;
+    finishEngineMove(played);
+  }catch(err){
+    if(token !== engineMoveToken || chess.fen() !== fenBefore) return;
+    // CDN недоступний, офлайн тощо — тихо повертаємось до вбудованого рушія
+    engineBusy = false;
+    const mv = getEngineMove();
+    finishEngineMove(mv ? chess.move(mv.san) : null);
   }
 }
 
@@ -2237,6 +2354,7 @@ function setStatus(msg, kind){
 
 function onSquarePointerDown(e, squareName){
   if(isReplaying) return;
+  if(engineBusy) return;
   if(currentTab === 'tactics' && puzzleSolved) return;
   if(currentTab === 'cct' && cctSolved) return;
   if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return;
