@@ -3,6 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://cdnjs.cloudflare.com; worker-src 'self' blob:; img-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none';">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<script>
+  // GitHub Pages не дає підмінити HTTP-заголовок X-Frame-Options чи
+  // CSP frame-ancestors (той через <meta> браузери ігнорують), тому єдиний
+  // доступний тут захист від clickjacking — розірвати фрейм на рівні JS,
+  // якщо сторінку вбудували в чужий сайт.
+  if (window.top !== window.self) {
+    window.top.location = window.self.location;
+  }
+</script>
 <title>Шаховий тренажер — дебюти та тактика</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -232,6 +243,21 @@
 
   .board-col{flex:0 0 auto;}
 
+  .board-wrap{position:relative;width:min(420px,88vw);height:min(420px,88vw);}
+  .hint-arrows{
+    position:absolute;
+    top:0;left:0;
+    width:100%;height:100%;
+    pointer-events:none;
+    z-index:5;
+  }
+  .hint-arrow{
+    stroke-linecap:round;
+    opacity:0.85;
+  }
+  .hint-arrow.arrow-green{stroke:var(--olive);stroke-width:4;}
+  .hint-arrow.arrow-red{stroke:var(--clay);stroke-width:7;}
+
   .board{
     display:grid;
     grid-template-columns:repeat(8,1fr);
@@ -278,6 +304,20 @@
     position:absolute;inset:0;
     background:rgba(184,134,62,.28);
   }
+  .sq-coord{
+    position:absolute;
+    font-family:var(--font-mono);
+    font-size:0.62rem;
+    font-weight:600;
+    line-height:1;
+    pointer-events:none;
+    opacity:0.8;
+    z-index:1;
+  }
+  .sq-coord.rank{top:2px;left:3px;}
+  .sq-coord.file{bottom:2px;right:3px;}
+  .sq.light .sq-coord{color:var(--walnut);}
+  .sq.dark .sq-coord{color:var(--ivory);}
   .piece{
     font-size:min(9vw,42px);
     line-height:1;
@@ -384,6 +424,13 @@
     color:var(--gold-soft);
   }
   .theory .idea{font-size:0.9rem;color:var(--text);margin:0 0 12px;max-width:70ch;}
+  .eval-strip-line{
+    font-family:var(--font-mono);
+    font-size:1.15rem;
+    letter-spacing:1px;
+    color:var(--gold-soft);
+    word-break:break-all;
+  }
   .plans-grid{
     display:grid;
     grid-template-columns:1fr 1fr;
@@ -494,6 +541,19 @@
   }
   .cct-answer.shown{display:block;}
 
+  /* ---- Гра проти бота (Stockfish) ---- */
+  .eval-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;}
+  .eval-bar{position:relative;width:20px;height:min(420px,88vw);background:#241811;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  .eval-bar-fill{position:absolute;left:0;bottom:0;width:100%;background:#F7F1E3;transition:height .35s ease;}
+  .eval-bar-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);}
+  .engine-status{font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;}
+  .engine-status.ok{color:var(--olive);}
+  .engine-status.err{color:#D98A75;}
+  .hint-toggle{display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;cursor:pointer;}
+  .engine-lines{display:none;margin-bottom:12px;}
+  .engine-line{font-family:var(--font-mono);font-size:0.8rem;color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin-bottom:6px;}
+  .engine-line-eval{color:var(--gold-soft);font-weight:600;margin-right:8px;}
+
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
   }
@@ -516,6 +576,7 @@
     <button class="tab-btn" data-tab="tactics">Тактика</button>
     <button class="tab-btn" data-tab="cct">Зівки (CCT)</button>
     <button class="tab-btn" data-tab="endgames">Ендшпілі</button>
+    <button class="tab-btn" data-tab="bot">Проти бота</button>
   </nav>
 
   <div class="stats-line" id="statsLine"></div>
@@ -527,28 +588,46 @@
       <div class="item-header" id="itemHeader"></div>
 
       <div class="board-area">
+        <div class="eval-col" id="evalCol" style="display:none;">
+          <div class="eval-bar" id="evalBar"><div class="eval-bar-fill" id="evalBarFill" style="height:50%;"></div></div>
+          <div class="eval-bar-label" id="evalBarLabel">0.0</div>
+        </div>
         <div class="board-col">
-          <div class="board" id="board"></div>
+          <div class="board-wrap" id="boardWrap">
+            <div class="board" id="board"></div>
+            <svg class="hint-arrows" id="hintArrows" viewBox="0 0 420 420" preserveAspectRatio="none">
+              <defs>
+                <marker id="arrowHeadGreen" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                  <polygon points="0,0 8,4 0,8" fill="var(--olive)"></polygon>
+                </marker>
+                <marker id="arrowHeadRed" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
+                  <polygon points="0,0 7,3.5 0,7" fill="var(--clay)"></polygon>
+                </marker>
+              </defs>
+              <line id="hintArrow1" class="hint-arrow arrow-green" marker-end="url(#arrowHeadGreen)" style="display:none;"></line>
+              <line id="hintArrow2" class="hint-arrow arrow-red" marker-end="url(#arrowHeadRed)" style="display:none;"></line>
+            </svg>
+          </div>
         </div>
         <div class="info-col">
           <div class="status-msg" id="statusMsg">Обери пункт зі списку зліва.</div>
           <div class="move-list" id="moveList"></div>
           <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
           <div id="freePlayBox" style="display:none;">
-            <div class="diff-filter" id="engineStrengthRow">
-              <span class="item-list-label" style="margin:0 4px 0 0;opacity:.75;align-self:center;">Суперник:</span>
-              <button class="diff-btn" data-strength="weak">Слабкий</button>
-              <button class="diff-btn" data-strength="medium">Середній (Stockfish)</button>
-              <button class="diff-btn" data-strength="strong">Сильний (Stockfish)</button>
-            </div>
             <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
           </div>
           <div id="analysisBtnBox" style="display:none;margin:4px 0 12px;">
             <button class="btn" id="analysisBtn" style="width:100%;">📊 Показати аналіз ходів</button>
           </div>
+          <div id="botBox" style="display:none;">
+            <div class="engine-status" id="engineStatusLine"></div>
+            <label class="hint-toggle"><input type="checkbox" id="botHintsToggle"> Підказки рушія (2 лінії)</label>
+            <div class="engine-lines" id="engineLinesBox"></div>
+          </div>
           <div class="btn-row">
             <button class="btn" id="resetBtn">Почати заново</button>
             <button class="btn" id="undoBtn">Скасувати хід</button>
+            <button class="btn" id="flipBtn" title="Подивитись на дошку з іншого боку">⇅ Розвернути</button>
             <button class="btn" id="hintBtn">Підказка</button>
             <button class="btn primary" id="nextBtn">Далі →</button>
           </div>
@@ -561,6 +640,29 @@
 </div>
 
 <script>
+/* ===================== НАЛАШТУВАННЯ ПЕРЕВІРКИ ПРИНЦИПІВ =====================
+   Усі порогові числа для вільної частини дебюту (розділ "ПРИНЦИПИ ДЕБЮТУ" —
+   evaluatePrincipleMove, classifyMoveLoss, getPositionAdvisories) зібрані тут
+   одним місцем, щоб підкручувати після тестування, не шукаючи по всьому файлу. */
+const PRINCIPLE_TUNING = {
+  // Від якої вартості фігури (у "пішакових" одиницях, пішак = 100) хід, що
+  // залишає її під боєм без компенсації, вважається явним ляпом.
+  hangThreshold: { strict: 300, soft: 500 },
+  // Скільки легких фігур (з b/c/f/g1 чи 8) має бути розвинено, перш ніж
+  // дозволити вивід ферзя.
+  minDevelopedForQueen: { strict: 2, soft: 1 },
+  // Те саме — перш ніж дозволити хід крайнім пішаком (a/h) на два поля.
+  // Діє лише в строгому режимі (у м'якому цю перевірку вимкнено повністю).
+  minDevelopedForRookPawn: 3,
+  // Класифікація ходу за втратою оцінки рушія (у тих самих "пішакових"
+  // одиницях): <= good — хороший хід, <= inaccuracy — неточність, більше —
+  // помилка.
+  moveQuality: { good: 50, inaccuracy: 150 },
+  // Через скільки напівходів після початку вільної частини з'являються
+  // ненав'язливі підказки про рокіровку й боротьбу за центр.
+  advisoryPlies: { castle: 16, centerPawn: 10 }
+};
+
 /* ===================== ДАНІ ===================== */
 
 const OPENINGS = [
@@ -1043,6 +1145,26 @@ let principleMode = false; // після обов'язкової частини 
 let principleMoveLog = []; // {moveNo, san, lossCp, bestSan} для кожного ходу гравця у вільній частині
 let tacticsFilter = 'all'; // фільтр складності на вкладці "Тактика": all | easy | medium | hard
 
+// ---- Гра проти бота (Stockfish) ----
+const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+const HELPER_ANALYSIS_DEPTH = 18; // на скільки півходів прораховує "чесний" рушій для оцінки й підказок
+const MIN_HINT_DEPTH = 12; // раніші (мілкі) info-рядки ще не показуємо — вони часто дають кривий хід
+const BOT_LEVELS = [
+  {label:'Дуже слабкий', elo:800},
+  {label:'Слабкий', elo:1200},
+  {label:'Середній', elo:1600},
+  {label:'Сильний', elo:2000},
+  {label:'Дуже сильний', elo:2400},
+  {label:'Максимальний', elo:2850}
+];
+let botColor = 'w'; // кольором якого грає користувач у вкладці "Проти бота"
+let botEloIdx = 4; // за замовчуванням Elo 2400
+let botHintsOn = false;
+let botEngine = null;   // грає ходи за суперника (обмежена сила через UCI_LimitStrength)
+let helperEngine = null; // завжди повної сили — рахує чесну оцінку й підказки, незалежно від рівня суперника
+let engineThinking = false;
+let botPositionToken = 0; // зростає при undo/reset, щоб проігнорувати застарілу відповідь рушія
+
 /* drag & drop state */
 let dragActive = false;
 let dragMoved = false;
@@ -1056,8 +1178,6 @@ function clearReplayTimers(){
   replayTimers.forEach(t=>clearTimeout(t));
   replayTimers = [];
   isReplaying = false;
-  engineMoveToken++; // інвалідує будь-який хід Stockfish, що ще думає над попередньою позицією
-  engineBusy = false;
 }
 
 const PROG_KEY_OPENINGS = 'chess_trainer_openings_progress_v1';
@@ -1163,6 +1283,25 @@ const freePlayBox = document.getElementById('freePlayBox');
 const playVsEngineBtn = document.getElementById('playVsEngineBtn');
 const analysisBtnBox = document.getElementById('analysisBtnBox');
 const analysisBtn = document.getElementById('analysisBtn');
+const evalColEl = document.getElementById('evalCol');
+const evalBarFillEl = document.getElementById('evalBarFill');
+const evalBarLabelEl = document.getElementById('evalBarLabel');
+const botBoxEl = document.getElementById('botBox');
+const engineStatusLineEl = document.getElementById('engineStatusLine');
+const botHintsToggleEl = document.getElementById('botHintsToggle');
+const engineLinesBoxEl = document.getElementById('engineLinesBox');
+const hintArrow1El = document.getElementById('hintArrow1');
+const hintArrow2El = document.getElementById('hintArrow2');
+
+// Спільний "скид" бічних панелей при перемиканні пункту/вкладки — раніше
+// кожна select*-функція ховала ці ж п'ять елементів окремими рядками.
+function resetInfoPanels(){
+  hintBox.style.display = 'none';
+  explainBox.style.display = 'none';
+  moveCommentBox.style.display = 'none';
+  freePlayBox.style.display = 'none';
+  analysisBtnBox.style.display = 'none';
+}
 const statsLine = document.getElementById('statsLine');
 const themeToggleBtn = document.getElementById('themeToggle');
 
@@ -1183,10 +1322,19 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     currentTab = btn.dataset.tab;
+    if(currentTab !== 'bot'){
+      evalColEl.style.display = 'none';
+      botBoxEl.style.display = 'none';
+      hintArrow1El.style.display = 'none';
+      hintArrow2El.style.display = 'none';
+      if(botEngine && botEngine.worker) botEngine.worker.postMessage('stop');
+      if(helperEngine && helperEngine.worker) helperEngine.worker.postMessage('stop');
+    }
     renderItemList();
     if(currentTab === 'openings'){ selectOpening(OPENINGS[0].id); }
     else if(currentTab === 'endgames'){ selectEndgame(ENDGAMES[0].id); }
     else if(currentTab === 'cct'){ selectCCT(CCT_PUZZLES[0].id); }
+    else if(currentTab === 'bot'){ selectBot(botColor); }
     else { selectPuzzle(PUZZLES[0].id); }
   });
 });
@@ -1195,11 +1343,11 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(currentTab === 'openings') selectOpening(currentOpening.id);
   else if(currentTab === 'endgames') selectEndgame(currentEndgameItem.id);
   else if(currentTab === 'cct') selectCCT(currentCCT.id);
+  else if(currentTab === 'bot') selectBot(botColor);
   else selectPuzzle(currentPuzzle.id);
 });
 document.getElementById('undoBtn').addEventListener('click', ()=>{
   if(isReplaying) return;
-  if(engineBusy) return;
   if(dragActive){ cleanupDrag(); }
   const undone = chess.undo();
   if(!undone) return;
@@ -1212,6 +1360,11 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
       }
     } else if(chess.turn() !== userColor){
       chess.undo();
+      if(principleMode && principleMoveLog.length){
+        // Інакше скасований хід лишився б у логу й спотворював підсумковий аналіз.
+        principleMoveLog.pop();
+        analysisBtnBox.style.display = principleMoveLog.length ? 'block' : 'none';
+      }
     }
     setStatus('Хід скасовано. Твій хід.', '');
     moveCommentBox.style.display = 'none';
@@ -1228,6 +1381,13 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
     cctSolved = false;
     explainBox.style.display = 'none';
     setStatus('Хід скасовано. Спробуй ще раз.', '');
+  } else if(currentTab === 'bot'){
+    engineThinking = false;
+    botPositionToken++; // застаріла відповідь рушія, що йшла в дорозі, більше не застосовується
+    if(chess.turn() !== userColor){
+      chess.undo();
+    }
+    setStatus('Хід скасовано. Твій хід.', '');
   } else {
     puzzleSolved = false;
     explainBox.style.display = 'none';
@@ -1236,6 +1396,7 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
   selected = null; legalTargets = []; lastMove = null;
   renderBoard();
   renderMoveList();
+  if(currentTab === 'bot') syncBotPosition();
 });
 document.getElementById('nextBtn').addEventListener('click', ()=>{
   if(currentTab === 'openings'){
@@ -1256,6 +1417,8 @@ document.getElementById('nextBtn').addEventListener('click', ()=>{
     const idx = CCT_PUZZLES.findIndex(c=>c.id===currentCCT.id);
     const next = CCT_PUZZLES[(idx+1) % CCT_PUZZLES.length];
     selectCCT(next.id);
+  } else if(currentTab === 'bot'){
+    selectBot(botColor);
   } else {
     const pool = tacticsFilter === 'all' ? PUZZLES : PUZZLES.filter(p=>p.difficulty===tacticsFilter);
     const list = pool.length ? pool : PUZZLES;
@@ -1266,6 +1429,13 @@ document.getElementById('nextBtn').addEventListener('click', ()=>{
 });
 document.getElementById('hintBtn').addEventListener('click', ()=>{
   hintBox.style.display = hintBox.style.display === 'none' ? 'block' : 'none';
+});
+document.getElementById('flipBtn').addEventListener('click', ()=>{
+  // Суто візуальне перемикання — не чіпає стан гри, тож працює будь-де: у
+  // теорії, під час перегляду пасток/варіантів чи в будь-якій вкладці.
+  flipped = !flipped;
+  renderBoard();
+  renderHintArrows();
 });
 
 /* ===================== СПИСОК ПУНКТІВ ===================== */
@@ -1356,6 +1526,9 @@ function renderItemList(){
       empty.textContent = 'У репертуарі поки порожньо — познач ★ біля потрібних дебютів.';
       itemListEl.appendChild(empty);
     }
+  } else if(currentTab === 'bot'){
+    renderBotColorPicker();
+    renderBotLevelPicker();
   } else {
     items.forEach(addItemBtn);
   }
@@ -1575,91 +1748,6 @@ function getEngineMove(){
   return result ? result.move : null;
 }
 
-/* ===================== СИЛЬНИЙ РУШІЙ (STOCKFISH, ОПЦІЙНО) ===================== */
-// Вантажиться лінькувато й лише з CDN, коли гравець сам обере "Середній" чи
-// "Сильний" — щоб ті, кому досить вбудованого мінімаксу, ніколи не платили
-// за завантаження кількамегабайтного файлу.
-
-const STOCKFISH_CDN_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
-const ENGINE_STRENGTH_KEY = 'chess_trainer_engine_strength_v1';
-const ENGINE_STRENGTH_MOVETIME = { medium: 600, strong: 2500 }; // мс на хід
-let engineStrength = (function(){
-  try{ return localStorage.getItem(ENGINE_STRENGTH_KEY) || 'weak'; }catch(e){ return 'weak'; }
-})();
-let engineBusy = false; // блокує ходи гравця, поки Stockfish думає
-let engineMoveToken = 0; // інвалідовує "запізнілий" хід Stockfish, якщо гравець тим часом скинув позицію
-let stockfishWorker = null;
-let stockfishReadyPromise = null;
-
-function saveEngineStrength(v){
-  engineStrength = v;
-  try{ localStorage.setItem(ENGINE_STRENGTH_KEY, v); }catch(e){}
-}
-
-function renderEngineStrengthButtons(){
-  document.querySelectorAll('#engineStrengthRow .diff-btn').forEach(btn=>{
-    btn.classList.toggle('active', btn.dataset.strength === engineStrength);
-  });
-}
-document.querySelectorAll('#engineStrengthRow .diff-btn').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
-    saveEngineStrength(btn.dataset.strength);
-    renderEngineStrengthButtons();
-  });
-});
-renderEngineStrengthButtons();
-
-// Створює воркер через Blob+importScripts (а не new Worker(cdnUrl) напряму) —
-// так надійніше працює крос-доменне завантаження скрипта в різних браузерах.
-function initStockfish(){
-  if(stockfishReadyPromise) return stockfishReadyPromise;
-  stockfishReadyPromise = new Promise((resolve, reject)=>{
-    try{
-      const blob = new Blob([`importScripts('${STOCKFISH_CDN_URL}');`], {type:'application/javascript'});
-      const worker = new Worker(URL.createObjectURL(blob));
-      const onReady = (e)=>{
-        if(e.data === 'uciok'){ worker.postMessage('isready'); }
-        if(e.data === 'readyok'){
-          worker.removeEventListener('message', onReady);
-          stockfishWorker = worker;
-          resolve(worker);
-        }
-      };
-      worker.addEventListener('message', onReady);
-      worker.addEventListener('error', (e)=> reject(e));
-      worker.postMessage('uci');
-    }catch(err){
-      reject(err);
-    }
-  });
-  return stockfishReadyPromise;
-}
-
-function stockfishGetMove(fen, movetime){
-  return initStockfish().then(worker=>{
-    return new Promise((resolve, reject)=>{
-      const onMessage = (e)=>{
-        const line = e.data;
-        if(typeof line === 'string' && line.startsWith('bestmove')){
-          worker.removeEventListener('message', onMessage);
-          const uci = line.split(' ')[1];
-          if(!uci || uci === '(none)') reject(new Error('Stockfish не знайшов хід'));
-          else resolve(uci);
-        }
-      };
-      worker.addEventListener('message', onMessage);
-      worker.postMessage('position fen ' + fen);
-      worker.postMessage('go movetime ' + movetime);
-    });
-  });
-}
-
-function uciToMoveObject(uci){
-  const move = { from: uci.slice(0,2), to: uci.slice(2,4) };
-  if(uci.length > 4) move.promotion = uci.slice(4,5);
-  return move;
-}
-
 function enterFreePlay(){
   freePlay = true;
   freePlayBox.style.display = 'none';
@@ -1672,8 +1760,11 @@ function enterFreePlay(){
   }
 }
 
-function finishEngineMove(played){
-  if(!played){ announceGameOver(); return; }
+function engineFreePlayMove(){
+  if(!freePlay && !principleMode) return;
+  const mv = getEngineMove();
+  if(!mv){ announceGameOver(); return; }
+  const played = chess.move(mv.san);
   lastMove = played;
   renderBoard();
   renderMoveList();
@@ -1681,32 +1772,6 @@ function finishEngineMove(played){
     announceGameOver();
   } else {
     setStatus('Твій хід.', '');
-  }
-}
-
-async function engineFreePlayMove(){
-  if(!freePlay && !principleMode) return;
-  if(engineStrength === 'weak'){
-    const mv = getEngineMove();
-    finishEngineMove(mv ? chess.move(mv.san) : null);
-    return;
-  }
-  const token = ++engineMoveToken;
-  const fenBefore = chess.fen();
-  engineBusy = true;
-  setStatus('Хід суперника (Stockfish думає...)', 'engine-thinking');
-  try{
-    const uci = await stockfishGetMove(fenBefore, ENGINE_STRENGTH_MOVETIME[engineStrength]);
-    if(token !== engineMoveToken || chess.fen() !== fenBefore) return; // гравець скинув/змінив позицію, поки Stockfish думав
-    const played = chess.move(uciToMoveObject(uci));
-    engineBusy = false;
-    finishEngineMove(played);
-  }catch(err){
-    if(token !== engineMoveToken || chess.fen() !== fenBefore) return;
-    // CDN недоступний, офлайн тощо — тихо повертаємось до вбудованого рушія
-    engineBusy = false;
-    const mv = getEngineMove();
-    finishEngineMove(mv ? chess.move(mv.san) : null);
   }
 }
 
@@ -1799,20 +1864,31 @@ function kingShelterSquares(color, kingSquare){
   return [];
 }
 
+// Клонує поточну позицію, грає на клоні один пробний хід і віддає результат
+// колбека (temp, played). Якщо хід чомусь не зігрався — повертає fallback.
+// Усі "а що якщо зіграти цей хід" перевірки нижче клонують позицію через цю
+// одну функцію, щоб логіку клонування (наприклад, урахування chess.header())
+// довелося міняти в одному місці, а не в трьох.
+function withTempMove(candidate, fn, fallback){
+  const temp = new Chess(chess.fen());
+  const played = temp.move(candidate.san);
+  if(!played) return fallback;
+  return fn(temp, played);
+}
+
 // Дуже спрощена перевірка "чи зависає фігура без компенсації": якщо після ходу
 // суперник одразу може забрати щойно переміщену фігуру (вартістю не нижче
 // заданого порогу), а відповісти взяттям на тому ж полі нема чим — це явний ляп.
 function wouldHangPiece(candidate, threshold){
   const lostValue = PIECE_VALUES[candidate.piece] || 0;
   if(lostValue < (threshold || 300)) return false;
-  const temp = new Chess(chess.fen());
-  const played = temp.move(candidate.san);
-  if(!played) return false;
-  const opponentCaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
-  if(opponentCaptures.length === 0) return false;
-  temp.move(opponentCaptures[0].san);
-  const ourRecaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
-  return ourRecaptures.length === 0;
+  return withTempMove(candidate, (temp)=>{
+    const opponentCaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
+    if(opponentCaptures.length === 0) return false;
+    temp.move(opponentCaptures[0].san);
+    const ourRecaptures = temp.moves({verbose:true}).filter(m => m.to === candidate.to && m.captured);
+    return ourRecaptures.length === 0;
+  }, false);
 }
 
 // Ненав'язливі підказки на позицію ПІСЛЯ ходу — не блокують хід, лише
@@ -1824,7 +1900,7 @@ function getPositionAdvisories(color, src){
 
   const kingSq = findKingSquare(color, c);
   const homeKingSq = color === 'w' ? 'e1' : 'e8';
-  if(kingSq === homeKingSq && plyCount >= 16){
+  if(kingSq === homeKingSq && plyCount >= PRINCIPLE_TUNING.advisoryPlies.castle){
     advisories.push('Король досі в центрі — подумай про рокіровку.');
   }
 
@@ -1833,7 +1909,7 @@ function getPositionAdvisories(color, src){
     const piece = c.get(file + homeRank);
     return !piece || piece.type !== 'p' || piece.color !== color;
   });
-  if(!centerPawnMoved && plyCount >= 10){
+  if(!centerPawnMoved && plyCount >= PRINCIPLE_TUNING.advisoryPlies.centerPawn){
     advisories.push('Жоден центральний пішак (d/e) ще не зрушив — варто поборотися за центр.');
   }
 
@@ -1844,12 +1920,12 @@ function evaluatePrincipleMove(candidate){
   const mover = candidate.color;
   const soft = strictness === 'soft';
 
-  if(wouldHangPiece(candidate, soft ? 500 : 300)){
+  if(wouldHangPiece(candidate, soft ? PRINCIPLE_TUNING.hangThreshold.soft : PRINCIPLE_TUNING.hangThreshold.strict)){
     return {ok:false, reason:'Цей хід залишає фігуру під боєм без жодної компенсації — перевір безпеку фігур.'};
   }
 
   const givesCheck = candidate.san.indexOf('+') !== -1 || candidate.san.indexOf('#') !== -1;
-  const minDevForQueen = soft ? 1 : 2;
+  const minDevForQueen = soft ? PRINCIPLE_TUNING.minDevelopedForQueen.soft : PRINCIPLE_TUNING.minDevelopedForQueen.strict;
   if(candidate.piece === 'q' && !candidate.captured && !givesCheck && countDevelopedMinors(mover) < minDevForQueen){
     return {ok:false, reason:'Зарано виводити ферзя — спершу розвинь коней і слонів.'};
   }
@@ -1858,7 +1934,7 @@ function evaluatePrincipleMove(candidate){
     const isRookPawnDoubleStep = candidate.piece === 'p' && !candidate.captured &&
       (candidate.from[0] === 'a' || candidate.from[0] === 'h') &&
       Math.abs(parseInt(candidate.to[1],10) - parseInt(candidate.from[1],10)) === 2;
-    if(isRookPawnDoubleStep && countDevelopedMinors(mover) < 3){
+    if(isRookPawnDoubleStep && countDevelopedMinors(mover) < PRINCIPLE_TUNING.minDevelopedForRookPawn){
       return {ok:false, reason:'Крайній пішак рідко вартий ходу так рано — краще розвинь фігуру або поборись за центр (e/d).'};
     }
 
@@ -1869,9 +1945,7 @@ function evaluatePrincipleMove(candidate){
     }
   }
 
-  const temp = new Chess(chess.fen());
-  const played = temp.move(candidate.san);
-  const advisories = played ? getPositionAdvisories(mover, temp) : [];
+  const advisories = withTempMove(candidate, (temp)=>getPositionAdvisories(mover, temp), []);
   return {ok:true, warning: advisories.length ? advisories.join(' ') : null};
 }
 
@@ -1889,16 +1963,34 @@ function logPrincipleMove(candidate, analysis){
     moveNo: Math.ceil(chess.history().length / 2),
     san: candidate.san,
     lossCp,
-    bestSan: (lossCp > 0 && analysis.move.san !== candidate.san) ? analysis.move.san : null
+    bestSan: (lossCp > 0 && analysis.move.san !== candidate.san) ? analysis.move.san : null,
+    evalCp: analysis.score // оцінка позиції (з боку білих) у момент цього ходу — для стрічки оцінки
   });
   analysisBtnBox.style.display = 'block';
 }
 
 function classifyMoveLoss(lossCp){
   if(lossCp <= 0) return 'best';
-  if(lossCp <= 50) return 'good';
-  if(lossCp <= 150) return 'inaccuracy';
+  if(lossCp <= PRINCIPLE_TUNING.moveQuality.good) return 'good';
+  if(lossCp <= PRINCIPLE_TUNING.moveQuality.inaccuracy) return 'inaccuracy';
   return 'mistake';
+}
+
+// Дуже проста текстова "стрічка оцінки" без жодних графічних бібліотек —
+// кожен символ показує, наскільки вигідною була позиція (з точки зору
+// гравця) у момент його чергового ходу. Дає змогу візуально побачити, де
+// партія почала "сповзати", навіть без списку найгірших ходів.
+function renderEvalSparkline(){
+  if(principleMoveLog.length < 2) return ''; // одна точка — ще не графік
+  const BLOCKS = '▁▂▃▄▅▆▇█';
+  const CAP = 400; // за межами ±4 пішаків далі висота стовпчика вже не росте
+  const perspective = userColor === 'w' ? 1 : -1;
+  const chars = principleMoveLog.map(m=>{
+    const val = Math.max(-CAP, Math.min(CAP, (m.evalCp || 0) * perspective));
+    const idx = Math.round((val + CAP) / (2 * CAP) * (BLOCKS.length - 1));
+    return BLOCKS[idx];
+  }).join('');
+  return `<p class="idea eval-strip"><strong>Стрічка оцінки:</strong> <span class="eval-strip-line" title="Кожен символ — оцінка позиції на момент твого чергового ходу: нижче — гірше для тебе, вище — краще">${chars}</span></p>`;
 }
 
 // Коротке резюме вільної частини — скільки ходів рушій вважав найкращими чи
@@ -1915,7 +2007,8 @@ function renderPrincipleAnalysisHtml(){
     .slice(0, 3);
   let html = `<div class="theory" style="margin-top:14px;">
     <h3>Аналіз вільної частини (${principleMoveLog.length} ${principleMoveLog.length === 1 ? 'хід' : 'ходів'})</h3>
-    <p class="idea">Найкращих ходів рушія: ${counts.best} · хороших: ${counts.good} · неточностей: ${counts.inaccuracy} · помилок: ${counts.mistake}.</p>`;
+    <p class="idea">Найкращих ходів рушія: ${counts.best} · хороших: ${counts.good} · неточностей: ${counts.inaccuracy} · помилок: ${counts.mistake}.</p>
+    ${renderEvalSparkline()}`;
   if(worst.length){
     html += `<div class="plans-col"><h4>Найпомітніші відхилення від рушія</h4><ul>${worst.map(m =>
       `<li>${m.moveNo}. ${m.san} — втрата ≈ ${(m.lossCp/100).toFixed(2)} пішака${m.bestSan ? ` (краще було ${m.bestSan})` : ''}</li>`
@@ -1938,14 +2031,10 @@ function selectOpening(id){
   freePlay = false;
   principleMode = false;
   principleMoveLog = [];
-  analysisBtnBox.style.display = 'none';
   userColor = currentOpening.side === 'white' ? 'w' : 'b';
   flipped = userColor === 'b';
   selected = null; legalTargets = []; lastMove = null;
-  hintBox.style.display = 'none';
-  explainBox.style.display = 'none';
-  moveCommentBox.style.display = 'none';
-  freePlayBox.style.display = 'none';
+  resetInfoPanels();
   updateActiveItem();
 
   renderOpeningHeader();
@@ -2117,11 +2206,8 @@ function selectPuzzle(id){
   freePlay = false;
   flipped = false;
   selected = null; legalTargets = []; lastMove = null;
-  hintBox.style.display = 'none';
+  resetInfoPanels();
   hintBox.textContent = currentPuzzle.hint;
-  explainBox.style.display = 'none';
-  freePlayBox.style.display = 'none';
-  analysisBtnBox.style.display = 'none';
   updateActiveItem();
 
   const diffLabel = currentPuzzle.difficulty ? ` · рівень: ${DIFFICULTY_LABELS[currentPuzzle.difficulty]}` : '';
@@ -2161,11 +2247,8 @@ function selectCCT(id){
   flipped = false;
   selected = null; legalTargets = [];
   lastMove = currentCCT.lastMove || null; // лише для підсвітки ходу суперника
-  hintBox.style.display = 'none';
+  resetInfoPanels();
   hintBox.textContent = currentCCT.hint;
-  explainBox.style.display = 'none';
-  freePlayBox.style.display = 'none';
-  analysisBtnBox.style.display = 'none';
   updateActiveItem();
 
   const cl = currentCCT.checklist;
@@ -2219,11 +2302,7 @@ function selectEndgame(id){
   currentEndgameItem = ENDGAMES.find(e=>e.id===id);
   endgamePuzzleSolved = false;
   selected = null; legalTargets = []; lastMove = null;
-  hintBox.style.display = 'none';
-  explainBox.style.display = 'none';
-  moveCommentBox.style.display = 'none';
-  freePlayBox.style.display = 'none';
-  analysisBtnBox.style.display = 'none';
+  resetInfoPanels();
 
   if(currentEndgameItem.kind === 'technique'){
     chess = new Chess(currentEndgameItem.startFen);
@@ -2322,6 +2401,19 @@ function renderBoard(){
         sqEl.appendChild(span);
       }
 
+      if(displayCol === 0){
+        const rankLabel = document.createElement('span');
+        rankLabel.className = 'sq-coord rank';
+        rankLabel.textContent = rank;
+        sqEl.appendChild(rankLabel);
+      }
+      if(displayRow === 7){
+        const fileLabel = document.createElement('span');
+        fileLabel.className = 'sq-coord file';
+        fileLabel.textContent = file;
+        sqEl.appendChild(fileLabel);
+      }
+
       sqEl.addEventListener('pointerdown', (e)=>onSquarePointerDown(e, squareName));
       boardEl.appendChild(sqEl);
     }
@@ -2354,12 +2446,12 @@ function setStatus(msg, kind){
 
 function onSquarePointerDown(e, squareName){
   if(isReplaying) return;
-  if(engineBusy) return;
   if(currentTab === 'tactics' && puzzleSolved) return;
   if(currentTab === 'cct' && cctSolved) return;
   if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return;
   if(currentTab === 'openings' && !freePlay && !principleMode && (!currentOpening || moveIndex >= currentOpening.moves.length)) return;
   if(currentTab === 'openings' && chess.turn() !== userColor) return;
+  if(currentTab === 'bot' && (chess.turn() !== userColor || engineThinking || chess.game_over())) return;
 
   const piece = chess.get(squareName);
 
@@ -2576,6 +2668,16 @@ function attemptMove(from, to){
       if(streak > 0){ streak = 0; updateStatsLine(); }
       setStatus('Не зовсім. Ще раз пройди CCT-чекліст і спробуй ще.', 'err');
     }
+  } else if(currentTab === 'bot'){
+    const mv = chess.move(candidate);
+    lastMove = mv;
+    renderBoard();
+    renderMoveList();
+    if(chess.game_over()){
+      announceGameOver();
+    } else {
+      syncBotPosition();
+    }
   } else {
     if(currentPuzzle.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
       const mv = chess.move(candidate);
@@ -2589,6 +2691,393 @@ function attemptMove(from, to){
       setStatus('Не зовсім. Спробуй ще раз.', 'err');
     }
   }
+}
+
+/* ===================== ПРОТИ БОТА (STOCKFISH) =====================
+   Два незалежні Web Worker-и з тим самим stockfish.js:
+   - botEngine   — грає ходи за суперника, сила обмежена через UCI_LimitStrength + UCI_Elo,
+                   щоб можна було грати проти реально слабшого рушія, а не завжди програвати.
+   - helperEngine — завжди повної сили, MultiPV 2 — рахує чесну оцінку позиції (шкала зліва
+                   від дошки) і, якщо увімкнено перемикач, дві кращі лінії — незалежно від
+                   того, наскільки слабкого суперника обрав користувач. */
+
+let stockfishBlobUrlPromise = null;
+// Воркер не можна створити напряму з URL іншого походження (браузер кидає
+// SecurityError) — тому спершу завантажуємо скрипт через fetch і створюємо
+// Worker з blob-URL. Промис кешується, щоб обидва рушії не тягли файл двічі.
+function getStockfishBlobUrl(){
+  if(!stockfishBlobUrlPromise){
+    stockfishBlobUrlPromise = fetch(STOCKFISH_URL)
+      .then(r=>{ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+      .then(text=>URL.createObjectURL(new Blob([text], {type:'application/javascript'})));
+  }
+  return stockfishBlobUrlPromise;
+}
+
+function createEngineController(opts){
+  const ctrl = {
+    worker:null, ready:false, failed:false, lines:[],
+    onReady:null, onEval:null, onError:null,
+    busy:false, pending:null, activeOnBest:null
+  };
+  // Черга запитів: якщо рушій зараз щось рахує, нову позицію не надсилаємо
+  // одразу (старі "info"-рядки про попередню позицію можуть ще летіти і
+  // переплутатися з новими) — чекаємо його власного bestmove і лише тоді
+  // стартуємо наступний запит із request().
+  ctrl.request = function(fen, goCmd, onBest){
+    ctrl.pending = {fen, goCmd, onBest};
+    if(ctrl.busy){
+      ctrl.worker.postMessage('stop');
+    } else {
+      launchPending(ctrl);
+    }
+  };
+  getStockfishBlobUrl().then(blobUrl=>{
+    if(ctrl.failed) return; // користувач уже пішов з вкладки/сталася інша помилка, поки файл вантажився
+    try{
+      ctrl.worker = new Worker(blobUrl);
+    }catch(e){
+      ctrl.failed = true;
+      if(ctrl.onError) ctrl.onError();
+      return;
+    }
+    attachEngineHandlers(ctrl, opts);
+    ctrl.worker.postMessage('uci');
+  }).catch(()=>{
+    ctrl.failed = true;
+    if(ctrl.onError) ctrl.onError();
+  });
+  return ctrl;
+}
+
+function attachEngineHandlers(ctrl, opts){
+  ctrl.worker.onerror = ()=>{
+    ctrl.failed = true;
+    ctrl.ready = false;
+    if(ctrl.onError) ctrl.onError();
+  };
+  ctrl.worker.onmessage = (e)=>{
+    const line = typeof e.data === 'string' ? e.data : (e.data && e.data.data) || '';
+    if(line === 'uciok'){
+      if(opts.limitStrength){
+        ctrl.worker.postMessage('setoption name UCI_LimitStrength value true');
+        ctrl.worker.postMessage('setoption name UCI_Elo value ' + opts.elo);
+      } else {
+        ctrl.worker.postMessage('setoption name UCI_LimitStrength value false');
+      }
+      ctrl.worker.postMessage('setoption name MultiPV value ' + (opts.multipv || 1));
+      ctrl.worker.postMessage('isready');
+      return;
+    }
+    if(line === 'readyok'){
+      ctrl.ready = true;
+      if(ctrl.onReady) ctrl.onReady();
+      return;
+    }
+    if(line.indexOf('info') === 0){
+      if(ctrl.pending) return; // новіший запит вже в черзі — цей "info" ще від старої позиції, ігноруємо
+      const depthMatch = line.match(/^info depth (\d+)/);
+      const mpvMatch = line.match(/multipv (\d+)/);
+      const cpMatch = line.match(/score cp (-?\d+)/);
+      const mateMatch = line.match(/score mate (-?\d+)/);
+      const pvMatch = line.match(/ pv (\S.*)$/);
+      if(mpvMatch && (cpMatch || mateMatch) && pvMatch){
+        const idx = +mpvMatch[1] - 1;
+        ctrl.lines[idx] = {
+          depth: depthMatch ? +depthMatch[1] : 0,
+          cp: cpMatch ? +cpMatch[1] : null,
+          mate: mateMatch ? +mateMatch[1] : null,
+          pvUci: pvMatch[1].trim().split(/\s+/)
+        };
+        if(ctrl.onEval) ctrl.onEval();
+      }
+      return;
+    }
+    if(line.indexOf('bestmove') === 0){
+      ctrl.busy = false;
+      const uci = line.split(' ')[1];
+      const cb = ctrl.activeOnBest;
+      ctrl.activeOnBest = null;
+      if(ctrl.pending){
+        // Позиція вже змінилась, поки рушій рахував, — цей bestmove застарів,
+        // одразу стартуємо запит, що чекав своєї черги.
+        launchPending(ctrl);
+      } else if(cb){
+        cb(uci === '(none)' ? null : uci);
+      }
+      return;
+    }
+  };
+}
+
+function launchPending(ctrl){
+  if(!ctrl.pending) return;
+  const {fen, goCmd, onBest} = ctrl.pending;
+  ctrl.pending = null;
+  ctrl.lines = [];
+  ctrl.activeOnBest = onBest || null;
+  ctrl.busy = true;
+  ctrl.worker.postMessage('position fen ' + fen);
+  ctrl.worker.postMessage(goCmd);
+}
+
+function setEngineStatus(msg, kind){
+  engineStatusLineEl.textContent = msg;
+  engineStatusLineEl.className = 'engine-status' + (kind ? ' ' + kind : '');
+}
+
+function initBotEnginesIfNeeded(){
+  if(botEngine || helperEngine) return;
+  setEngineStatus('Завантаження рушія Stockfish…', '');
+  botEngine = createEngineController({limitStrength:true, elo: BOT_LEVELS[botEloIdx].elo, multipv:1});
+  helperEngine = createEngineController({limitStrength:false, multipv:2});
+  const onError = ()=>{
+    setEngineStatus('Не вдалося завантажити Stockfish. Перевір з\'єднання з інтернетом і онови сторінку.', 'err');
+    if(currentTab === 'bot'){
+      setStatus('Не вдалося завантажити Stockfish. Перевір з\'єднання з інтернетом і онови сторінку.', 'err');
+    }
+  };
+  botEngine.onError = onError;
+  helperEngine.onError = onError;
+  if(botEngine.failed || helperEngine.failed){ onError(); return; }
+  let readyCount = 0;
+  const onEitherReady = ()=>{
+    readyCount++;
+    if(readyCount >= 2){
+      setEngineStatus('Рушій готовий.', 'ok');
+      if(currentTab === 'bot') syncBotPosition();
+    }
+  };
+  botEngine.onReady = onEitherReady;
+  helperEngine.onReady = onEitherReady;
+  helperEngine.onEval = ()=>{
+    updateEvalBar();
+    if(botHintsOn) renderEngineLines();
+    renderHintArrows();
+  };
+}
+
+// Координати клітинки в умовній системі 420×420 (в'язана з viewBox SVG, а не з
+// реальним розміром дошки на екрані — тому не залежить від адаптивного скейлу).
+function squareCenter(square){
+  const colIdx = 'abcdefgh'.indexOf(square[0]);
+  const rowIdx = 8 - (+square[1]);
+  const displayCol = flipped ? 7 - colIdx : colIdx;
+  const displayRow = flipped ? 7 - rowIdx : rowIdx;
+  const cell = 420 / 8;
+  return {x: displayCol * cell + cell / 2, y: displayRow * cell + cell / 2};
+}
+
+function setArrow(lineEl, uciMove){
+  if(!uciMove){ lineEl.style.display = 'none'; return; }
+  const from = uciMove.slice(0,2), to = uciMove.slice(2,4);
+  const p1 = squareCenter(from), p2 = squareCenter(to);
+  lineEl.setAttribute('x1', p1.x);
+  lineEl.setAttribute('y1', p1.y);
+  lineEl.setAttribute('x2', p2.x);
+  lineEl.setAttribute('y2', p2.y);
+  lineEl.style.display = 'block';
+}
+
+function renderHintArrows(){
+  if(currentTab !== 'bot' || !botHintsOn){
+    hintArrow1El.style.display = 'none';
+    hintArrow2El.style.display = 'none';
+    return;
+  }
+  const lines = (helperEngine && helperEngine.lines) || [];
+  const l1 = lines[0] && lines[0].depth >= MIN_HINT_DEPTH ? lines[0] : null;
+  const l2 = lines[1] && lines[1].depth >= MIN_HINT_DEPTH ? lines[1] : null;
+  setArrow(hintArrow1El, l1 && l1.pvUci && l1.pvUci[0]);
+  setArrow(hintArrow2El, l2 && l2.pvUci && l2.pvUci[0]);
+}
+
+function syncBotPosition(){
+  if(currentTab !== 'bot' || !chess) return;
+  const fen = chess.fen();
+  if(helperEngine && helperEngine.ready && !helperEngine.failed){
+    // Показуємо "Аналізую…" одразу, але самі lines[] чіпаємо лише тоді, коли
+    // рушій справді почав рахувати нову позицію (у launchPending) — інакше
+    // "info" від ще не зупиненого старого пошуку встигне проскочити як новий.
+    if(botHintsOn) engineLinesBoxEl.innerHTML = '<div class="engine-line">Аналізую позицію…</div>';
+    hintArrow1El.style.display = 'none';
+    hintArrow2El.style.display = 'none';
+    helperEngine.request(fen, 'go depth ' + HELPER_ANALYSIS_DEPTH);
+  }
+  if(chess.game_over()) return;
+  const isBotTurn = chess.turn() !== userColor;
+  if(isBotTurn && botEngine && botEngine.ready && !botEngine.failed){
+    engineThinking = true;
+    setStatus('Хід суперника (Stockfish думає...)', 'engine-thinking');
+    const requestedFen = fen;
+    botEngine.request(fen, 'go movetime 700', (uci)=>{
+      engineThinking = false;
+      if(!uci) return;
+      // Якщо на момент відповіді ми вже не в тій позиції (undo/reset), запит
+      // усе одно був знятий чергою request() — цей колбек виконується лише
+      // для дійсно останнього запиту, тож додаткова перевірка не потрібна.
+      playEngineUciMove(uci);
+    });
+  }
+}
+
+function playEngineUciMove(uci){
+  const mv = chess.move({from: uci.slice(0,2), to: uci.slice(2,4), promotion: uci.length > 4 ? uci.slice(4,5) : undefined});
+  if(!mv) return;
+  lastMove = mv;
+  renderBoard();
+  renderMoveList();
+  if(chess.game_over()){
+    announceGameOver();
+  } else {
+    setStatus('Твій хід.', '');
+    syncBotPosition();
+  }
+}
+
+function pvToSanText(pvUci, fen, maxPlies){
+  const temp = new Chess(fen);
+  const sans = [];
+  for(let i=0;i<Math.min(maxPlies, pvUci.length);i++){
+    const u = pvUci[i];
+    const mv = temp.move({from:u.slice(0,2), to:u.slice(2,4), promotion:u.length>4?u.slice(4,5):undefined});
+    if(!mv) break;
+    sans.push(mv.san);
+  }
+  return sans.join(' ');
+}
+
+function updateEvalBar(){
+  if(currentTab !== 'bot') return;
+  const line = helperEngine && helperEngine.lines[0];
+  if(!line || line.depth < MIN_HINT_DEPTH) return; // ще замало прораховано — не показуємо ранню (часто криву) оцінку
+  const turn = chess.turn();
+  let cpWhite, label;
+  if(line.mate !== null){
+    const mateWhite = turn === 'w' ? line.mate : -line.mate;
+    cpWhite = mateWhite > 0 ? 1000 : -1000;
+    label = 'Мат у ' + Math.abs(line.mate);
+  } else {
+    cpWhite = turn === 'w' ? line.cp : -line.cp;
+    label = (cpWhite/100 >= 0 ? '+' : '') + (cpWhite/100).toFixed(1);
+  }
+  const clamped = Math.max(-1000, Math.min(1000, cpWhite));
+  const whitePct = 50 + (clamped/1000)*50;
+  evalBarFillEl.style.height = whitePct + '%';
+  evalBarLabelEl.textContent = label;
+}
+
+function renderEngineLines(){
+  const lines = (helperEngine && helperEngine.lines) || [];
+  const present = lines.filter(l=>l && l.depth >= MIN_HINT_DEPTH);
+  if(!present.length){
+    engineLinesBoxEl.innerHTML = '<div class="engine-line">Аналізую позицію…</div>';
+    return;
+  }
+  const fen = chess.fen();
+  const turn = chess.turn();
+  engineLinesBoxEl.innerHTML = present.map(l=>{
+    let evalText;
+    if(l.mate !== null){
+      evalText = 'Мат у ' + Math.abs(l.mate);
+    } else {
+      const cpWhite = turn === 'w' ? l.cp : -l.cp;
+      evalText = (cpWhite/100 >= 0 ? '+' : '') + (cpWhite/100).toFixed(1);
+    }
+    const sanText = pvToSanText(l.pvUci, fen, 5);
+    return `<div class="engine-line"><span class="engine-line-eval">${evalText}</span><span class="engine-line-pv">${sanText}</span></div>`;
+  }).join('');
+}
+
+botHintsToggleEl.addEventListener('change', ()=>{
+  botHintsOn = botHintsToggleEl.checked;
+  engineLinesBoxEl.style.display = botHintsOn ? 'block' : 'none';
+  if(botHintsOn) renderEngineLines();
+  renderHintArrows();
+});
+
+function renderBotColorPicker(){
+  const filterEl = document.createElement('div');
+  filterEl.className = 'diff-filter';
+  const options = [
+    {key:'w', label:'Білими'},
+    {key:'b', label:'Чорними'},
+    {key:'random', label:'Випадково'}
+  ];
+  options.forEach(opt=>{
+    const btn = document.createElement('button');
+    btn.className = 'diff-btn' + (botColor === opt.key ? ' active' : '');
+    btn.textContent = opt.label;
+    btn.addEventListener('click', ()=>{ selectBot(opt.key); });
+    filterEl.appendChild(btn);
+  });
+  itemListEl.appendChild(filterEl);
+}
+
+function renderBotLevelPicker(){
+  const label = document.createElement('div');
+  label.className = 'item-list-label';
+  label.textContent = 'Рівень суперника';
+  itemListEl.appendChild(label);
+  BOT_LEVELS.forEach((lvl, i)=>{
+    const b = document.createElement('button');
+    b.className = 'item-btn' + (botEloIdx === i ? ' active' : '');
+    b.innerHTML = `<span class="item-label"><span class="item-label-text"><span class="txt">${lvl.label}</span></span></span><span class="badge" style="color:var(--text-muted);font-size:10px;border:none;">${lvl.elo}</span>`;
+    b.addEventListener('click', ()=>{
+      botEloIdx = i;
+      if(botEngine && botEngine.worker && !botEngine.failed){
+        botEngine.worker.postMessage('setoption name UCI_Elo value ' + lvl.elo);
+      }
+      renderItemList();
+    });
+    itemListEl.appendChild(b);
+  });
+}
+
+function renderBotHeader(){
+  const lvl = BOT_LEVELS[botEloIdx];
+  itemHeaderEl.innerHTML = `
+    <div class="eco">Гра проти Stockfish · граєш ${userColor === 'w' ? 'білими' : 'чорними'} · рівень: ${lvl.label} (Elo ${lvl.elo})</div>
+    <h2>Проти бота</h2>
+    <p>Звичайна партія проти шахового рушія Stockfish без перевірки принципів. Обери колір і рівень суперника у списку зліва.</p>`;
+}
+
+function selectBot(colorChoice){
+  clearReplayTimers();
+  if(dragActive){ cleanupDrag(); }
+  botColor = colorChoice === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : colorChoice;
+  userColor = botColor;
+  chess = new Chess();
+  flipped = userColor === 'b';
+  selected = null; legalTargets = []; lastMove = null;
+  engineThinking = false;
+  botPositionToken++;
+  resetInfoPanels();
+  evalColEl.style.display = 'flex';
+  botBoxEl.style.display = 'block';
+  botHintsToggleEl.checked = botHintsOn;
+  engineLinesBoxEl.style.display = botHintsOn ? 'block' : 'none';
+  engineLinesBoxEl.innerHTML = '';
+  evalBarFillEl.style.height = '50%';
+  evalBarLabelEl.textContent = '0.0';
+  hintArrow1El.style.display = 'none';
+  hintArrow2El.style.display = 'none';
+
+  renderBotHeader();
+  renderItemList();
+  renderBoard();
+  renderMoveList();
+
+  initBotEnginesIfNeeded();
+  if((botEngine && botEngine.failed) || (helperEngine && helperEngine.failed)){
+    setStatus('Не вдалося завантажити Stockfish. Перевір з\'єднання з інтернетом і онови сторінку.', 'err');
+    return;
+  }
+  setStatus(userColor === 'w' ? 'Твій хід.' : 'Хід суперника (Stockfish думає...)', userColor === 'w' ? '' : 'engine-thinking');
+  if(botEngine && botEngine.ready){
+    syncBotPosition();
+  }
+  // якщо рушій ще завантажується — syncBotPosition() викличеться сам із onReady-колбеку в initBotEnginesIfNeeded
 }
 
 /* ===================== СТАРТ ===================== */
