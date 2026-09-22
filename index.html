@@ -2682,9 +2682,16 @@ function finishEndgamePuzzle(){
 
 // Дошка стоїть нижче тексту теорії за висотою сторінки — після вибору
 // дебюту чи лінії прокручуємо саме до неї, а не лише до верху панелі.
+// Рахуємо цільову позицію вручну (а не scrollIntoView) — так надійніше
+// спрацьовує одразу після innerHTML-перерендеру заголовка/картки.
 function scrollToBoard(){
   const el = document.getElementById('boardWrap');
-  if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+  if(!el) return;
+  requestAnimationFrame(()=>{
+    const rect = el.getBoundingClientRect();
+    const targetY = window.scrollY + rect.top - Math.max(16, (window.innerHeight - rect.height) / 2);
+    window.scrollTo({top: Math.max(0, targetY), behavior: 'smooth'});
+  });
 }
 
 function renderBoard(){
