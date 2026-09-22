@@ -130,7 +130,7 @@
     align-items:start;
   }
   @media (max-width:760px){
-    .layout{grid-template-columns:1fr;}
+    .layout{grid-template-columns:minmax(0,1fr);}
     .item-list{
       display:flex;
       flex-direction:row;
@@ -140,12 +140,16 @@
     }
     .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
     .item-list .item-row{flex:0 0 auto;}
+    /* Картки дебютів завеликі й високі для горизонтального ряду —
+       на мобільному лишаємо їх у звичайній вертикальній колонці. */
+    .item-list.cards-mode{flex-direction:column;overflow-x:visible;min-width:0;}
   }
 
   .item-list{
     display:flex;
     flex-direction:column;
     gap:6px;
+    min-width:0;
   }
   .item-btn{
     text-align:left;
@@ -538,6 +542,8 @@
     overflow:hidden;
     cursor:pointer;
     transition:border-color .15s ease, background .15s ease;
+    min-width:0;
+    width:100%;
   }
   .opening-card:hover{border-color:var(--gold);}
   .opening-card.active{border-color:var(--gold);background:var(--panel-2);}
@@ -547,8 +553,8 @@
     width:100%;
     aspect-ratio:1/1;
     display:grid;
-    grid-template-columns:repeat(8,1fr);
-    grid-template-rows:repeat(8,1fr);
+    grid-template-columns:repeat(8,minmax(0,1fr));
+    grid-template-rows:repeat(8,minmax(0,1fr));
     pointer-events:none;
   }
   .mini-sq{display:flex;align-items:center;justify-content:center;overflow:hidden;}
@@ -1607,6 +1613,7 @@ document.getElementById('flipBtn').addEventListener('click', ()=>{
 
 function renderItemList(){
   itemListEl.innerHTML = '';
+  itemListEl.classList.toggle('cards-mode', currentTab === 'openings');
   const progKey = currentTab === 'openings' ? PROG_KEY_OPENINGS : currentTab === 'endgames' ? PROG_KEY_ENDGAMES : currentTab === 'cct' ? PROG_KEY_CCT : PROG_KEY_TACTICS;
   const progress = loadProgress(progKey);
   const items = currentTab === 'openings' ? OPENINGS : currentTab === 'endgames' ? ENDGAMES : currentTab === 'cct' ? CCT_PUZZLES : PUZZLES;
@@ -1730,7 +1737,13 @@ function renderItemList(){
 
     card.appendChild(boardPreview);
     card.appendChild(body);
-    card.addEventListener('click', ()=> selectOpening(it.id));
+    card.addEventListener('click', ()=>{
+      selectOpening(it.id);
+      // Дошка часто нижче карток за висотою сторінки — після вибору
+      // дебюту одразу прокручуємо до неї, щоб не змушувати гортати вручну.
+      const panel = document.querySelector('.main-panel');
+      if(panel) panel.scrollIntoView({behavior:'smooth', block:'start'});
+    });
     itemListEl.appendChild(card);
   };
 
