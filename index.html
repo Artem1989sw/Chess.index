@@ -127,6 +127,10 @@
     gap:22px;
     align-items:start;
   }
+  /* Вкладка "Дебюти" — картки на всю ширину замість вузького бічного
+     списку, а деталі дебюту виринають окремим блоком нижче лише після
+     кліку (див. .main-panel нижче), а не займають місце завжди. */
+  .layout.stack-layout{grid-template-columns:minmax(0,1fr);}
   @media (max-width:760px){
     .layout{grid-template-columns:minmax(0,1fr);}
     .item-list{
@@ -138,9 +142,6 @@
     }
     .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
     .item-list .item-row{flex:0 0 auto;}
-    /* Картки дебютів завеликі й високі для горизонтального ряду —
-       на мобільному лишаємо їх у звичайній вертикальній колонці. */
-    .item-list.cards-mode{flex-direction:column;overflow-x:visible;min-width:0;}
   }
 
   .item-list{
@@ -148,6 +149,24 @@
     flex-direction:column;
     gap:6px;
     min-width:0;
+  }
+  .item-list.cards-mode{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:14px;
+  }
+  /* Рядки фільтрів (Строго/М'яко, Всі/За білих/За чорних) — прямі діти
+     #itemList поряд із картками, тож без цього грід розтягнув би їх на
+     всю висоту рядка карток замість вузької смужки кнопок. */
+  .item-list.cards-mode > .diff-filter{
+    grid-column:1 / -1;
+    align-self:start;
+  }
+  @media (max-width:900px){
+    .item-list.cards-mode{grid-template-columns:repeat(2,minmax(0,1fr));}
+  }
+  @media (max-width:760px){
+    .item-list.cards-mode{grid-template-columns:1fr;}
   }
   .item-btn{
     text-align:left;
@@ -639,7 +658,7 @@
   <div class="layout">
     <div class="item-list" id="itemList"></div>
 
-    <div class="main-panel">
+    <div class="main-panel" id="mainPanel">
       <div class="item-header" id="itemHeader"></div>
 
       <div class="board-area">
@@ -1315,6 +1334,7 @@ const CCT_PUZZLES = [
 
 let currentTab = 'openings';
 let currentOpening = null;
+let openingDetailOpen = false; // чи розкрита панель деталей дебюту (вкладка "Дебюти" стартує лише зі списком карток)
 let currentPuzzle = null;
 let currentEndgameItem = null;
 let currentCCT = null;
@@ -1466,6 +1486,8 @@ function countDue(key, items){
 /* ===================== DOM ===================== */
 
 const itemListEl = document.getElementById('itemList');
+const layoutEl = document.querySelector('.layout');
+const mainPanelEl = document.getElementById('mainPanel');
 const itemHeaderEl = document.getElementById('itemHeader');
 const boardEl = document.getElementById('board');
 const statusEl = document.getElementById('statusMsg');
@@ -1524,8 +1546,12 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
       if(botEngine && botEngine.worker) botEngine.worker.postMessage('stop');
       if(helperEngine && helperEngine.worker) helperEngine.worker.postMessage('stop');
     }
+    // Вкладка "Дебюти" щоразу відкривається зі списком карток, без
+    // одразу розкритої панелі деталей — вибір конкретного дебюту
+    // розкриває її кліком (openOpeningDetail).
+    if(currentTab === 'openings'){ openingDetailOpen = false; }
     renderItemList();
-    if(currentTab === 'openings'){ selectOpening(OPENINGS[0].id); }
+    if(currentTab === 'openings'){ /* чекаємо кліку по картці */ }
     else if(currentTab === 'endgames'){ selectEndgame(ENDGAMES[0].id); }
     else if(currentTab === 'cct'){ selectCCT(CCT_PUZZLES[0].id); }
     else if(currentTab === 'bot'){ selectBot(botColor); }
@@ -1637,6 +1663,8 @@ document.getElementById('flipBtn').addEventListener('click', ()=>{
 function renderItemList(){
   itemListEl.innerHTML = '';
   itemListEl.classList.toggle('cards-mode', currentTab === 'openings');
+  layoutEl.classList.toggle('stack-layout', currentTab === 'openings');
+  mainPanelEl.style.display = (currentTab === 'openings' && !openingDetailOpen) ? 'none' : '';
   const progKey = currentTab === 'openings' ? PROG_KEY_OPENINGS : currentTab === 'endgames' ? PROG_KEY_ENDGAMES : currentTab === 'cct' ? PROG_KEY_CCT : PROG_KEY_TACTICS;
   const progress = loadProgress(progKey);
   const items = currentTab === 'openings' ? OPENINGS : currentTab === 'endgames' ? ENDGAMES : currentTab === 'cct' ? CCT_PUZZLES : PUZZLES;
@@ -1761,8 +1789,13 @@ function renderItemList(){
     card.appendChild(boardPreview);
     card.appendChild(body);
     card.addEventListener('click', ()=>{
+      const wasOpen = openingDetailOpen;
+      openingDetailOpen = true;
       selectOpening(it.id);
-      scrollToBoard();
+      mainPanelEl.style.display = '';
+      // Якщо панель щойно розкрилась вперше — скролимо до її початку
+      // (заголовок дебюту), а не до дошки в її нижній частині.
+      wasOpen ? scrollToBoard() : scrollToPanelTop();
     });
     itemListEl.appendChild(card);
   };
@@ -2694,6 +2727,18 @@ function scrollToBoard(){
   });
 }
 
+// При першому розкритті панелі деталей дебюту скролимо до її верху
+// (заголовок і теорія), а не одразу до дошки нижче — інакше користувач
+// не бачить, який саме дебют відкрився.
+function scrollToPanelTop(){
+  if(!mainPanelEl) return;
+  requestAnimationFrame(()=>{
+    const rect = mainPanelEl.getBoundingClientRect();
+    const targetY = window.scrollY + rect.top - 12;
+    window.scrollTo({top: Math.max(0, targetY), behavior: 'smooth'});
+  });
+}
+
 function renderBoard(){
   boardEl.innerHTML = '';
   const board = chess.board(); // board[0] = rank8 ... board[7] = rank1
@@ -3424,7 +3469,6 @@ function selectBot(colorChoice){
 
 function init(){
   renderItemList();
-  selectOpening(OPENINGS[0].id);
 }
 
 if(typeof Chess === 'undefined'){
