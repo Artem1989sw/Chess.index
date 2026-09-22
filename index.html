@@ -1317,7 +1317,10 @@ let principleMoveLog = []; // {moveNo, san, lossCp, bestSan} для кожног
 let tacticsFilter = 'all'; // фільтр складності на вкладці "Тактика": all | easy | medium | hard
 
 // ---- Гра проти бота (Stockfish) ----
-const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+// Stockfish 17.1 (NNUE, "lite" мережа), однопотокова wasm-збірка — без потреби
+// в SharedArrayBuffer/COOP-COEP заголовках, тому працює й при відкритті файлу напряму.
+const STOCKFISH_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.js';
+const STOCKFISH_WASM_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm';
 const HELPER_ANALYSIS_DEPTH = 18; // на скільки півходів прораховує "чесний" рушій для оцінки й підказок
 const MIN_HINT_DEPTH = 12; // раніші (мілкі) info-рядки ще не показуємо — вони часто дають кривий хід
 const BOT_LEVELS = [
@@ -2991,11 +2994,15 @@ let stockfishBlobUrlPromise = null;
 // Воркер не можна створити напряму з URL іншого походження (браузер кидає
 // SecurityError) — тому спершу завантажуємо скрипт через fetch і створюємо
 // Worker з blob-URL. Промис кешується, щоб обидва рушії не тягли файл двічі.
+// stockfish-17.1-lite-single шукає свій .wasm через self.location.hash (сам він
+// на blob:-походженні, тому відносний шлях не спрацював би) — передаємо його
+// абсолютною URL-адресою у хеші blob-URL воркера.
 function getStockfishBlobUrl(){
   if(!stockfishBlobUrlPromise){
     stockfishBlobUrlPromise = fetch(STOCKFISH_URL)
       .then(r=>{ if(!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-      .then(text=>URL.createObjectURL(new Blob([text], {type:'application/javascript'})));
+      .then(text=>URL.createObjectURL(new Blob([text], {type:'application/javascript'})))
+      .then(blobUrl=>blobUrl + '#' + encodeURIComponent(STOCKFISH_WASM_URL));
   }
   return stockfishBlobUrlPromise;
 }
