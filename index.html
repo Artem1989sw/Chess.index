@@ -73,8 +73,6 @@
     --text:#2A2118;
     --text-muted:#6B5C45;
   }
-  body.light-theme .piece-w{color:#FFFFFF;text-shadow:0 0 1px #2A1C12,0 0 2px #2A1C12,0 1px 0 #2A1C12;}
-  body.light-theme .piece-b{color:#241811;text-shadow:0 0 1px #FFFFFF,0 0 2px #FFFFFF;}
   .stats-line .streak{color:var(--clay);}
   header.top h1{
     font-family:var(--font-display);
@@ -312,13 +310,14 @@
   .sq.light .sq-coord{color:var(--walnut);}
   .sq.dark .sq-coord{color:var(--ivory);}
   .piece{
-    font-size:min(9vw,42px);
-    line-height:1;
+    width:82%;
+    height:82%;
     z-index:2;
     cursor:grab;
     touch-action:none;
     -webkit-user-select:none;
     user-select:none;
+    filter:drop-shadow(0 1px 2px rgba(0,0,0,.35));
   }
   .piece.dragging-source{opacity:.3;}
   .drag-ghost{
@@ -326,12 +325,9 @@
     top:0; left:0;
     pointer-events:none;
     z-index:1000;
-    line-height:1;
     transform:translate(-50%,-50%);
     will-change:transform;
   }
-  .piece-w{color:#F7F1E3;text-shadow:0 0 1px #2A1C12,0 0 2px #2A1C12,0 1px 0 #2A1C12;}
-  .piece-b{color:#241811;text-shadow:0 0 1px #F7F1E3,0 0 2px #F7F1E3;}
 
   .info-col{flex:1 1 220px;min-width:220px;}
 
@@ -462,15 +458,36 @@
     margin-top:12px;
   }
   .variations-box h4{margin:0 0 8px;font-size:0.9rem;color:var(--olive);}
-  .variation-item{margin-bottom:12px;}
-  .variation-item:last-child{margin-bottom:0;}
+  .variations-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:8px;
+  }
+  @media (max-width:560px){.variations-grid{grid-template-columns:1fr;}}
+  .variation-item{
+    cursor:pointer;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:8px 10px;
+    transition:border-color .15s;
+  }
+  .variation-item:hover, .variation-item:focus-visible{border-color:var(--gold);outline:none;}
   .variation-item .variation-name{
     font-weight:600;
-    font-size:0.87rem;
+    font-size:0.84rem;
     color:var(--gold-soft);
     margin-bottom:2px;
   }
-  .variation-item p{font-size:0.85rem;color:var(--text-muted);margin:0 0 8px;}
+  .variation-item p{
+    font-size:0.78rem;
+    color:var(--text-muted);
+    margin:0;
+    display:-webkit-box;
+    -webkit-line-clamp:2;
+    -webkit-box-orient:vertical;
+    overflow:hidden;
+  }
   #returnTrainBtn{margin-top:12px;}
   #freePlayBox{margin:4px 0 12px;}
   #freePlayBox .btn{width:100%;}
@@ -560,7 +577,7 @@
   .mini-sq{display:flex;align-items:center;justify-content:center;overflow:hidden;}
   .mini-sq.light{background:var(--ivory);}
   .mini-sq.dark{background:var(--walnut);}
-  .mini-piece{font-size:min(3.4vw,15px);line-height:1;}
+  .mini-piece{width:82%;height:82%;}
   .opening-card-body{padding:8px 10px 10px;}
   .opening-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;}
   .opening-card-name{font-weight:600;font-size:0.85rem;color:var(--text);line-height:1.25;}
@@ -675,6 +692,9 @@
       </div>
     </div>
   </div>
+  <footer style="margin-top:24px;padding-top:14px;border-top:1px solid var(--line);font-size:0.75rem;color:var(--text-muted);">
+    Фігурки: набір cburnett (Colin M.L. Burnett), CC BY-SA 3.0 / GFDL.
+  </footer>
 </div>
 
 <script>
@@ -1742,10 +1762,7 @@ function renderItemList(){
     card.appendChild(body);
     card.addEventListener('click', ()=>{
       selectOpening(it.id);
-      // Дошка часто нижче карток за висотою сторінки — після вибору
-      // дебюту одразу прокручуємо до неї, щоб не змушувати гортати вручну.
-      const panel = document.querySelector('.main-panel');
-      if(panel) panel.scrollIntoView({behavior:'smooth', block:'start'});
+      scrollToBoard();
     });
     itemListEl.appendChild(card);
   };
@@ -1893,10 +1910,12 @@ function renderMiniBoard(container, op){
       const isLight = (rowIdx + colIdx) % 2 === 0;
       sq.className = 'mini-sq ' + (isLight ? 'light' : 'dark');
       if(piece){
-        const span = document.createElement('span');
-        span.className = 'mini-piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
-        span.textContent = pieceGlyph(piece);
-        sq.appendChild(span);
+        const img = document.createElement('img');
+        img.className = 'mini-piece';
+        img.draggable = false;
+        img.alt = '';
+        img.src = pieceImgSrc(piece);
+        sq.appendChild(img);
       }
       container.appendChild(sq);
     }
@@ -2370,12 +2389,13 @@ function renderOpeningHeader(){
     if(t.variations && t.variations.length){
       html += `<div class="variations-box">
         <h4>Варіанти відповіді суперника</h4>
-        ${t.variations.map((v,i)=>`
-          <div class="variation-item">
-            <div class="variation-name">${v.name}</div>
-            <p>${v.note}</p>
-            <button class="btn line-btn" data-line-kind="variation" data-line-index="${i}">Показати на дошці</button>
-          </div>`).join('')}
+        <div class="variations-grid">
+          ${t.variations.map((v,i)=>`
+            <div class="variation-item line-btn" data-line-kind="variation" data-line-index="${i}" tabindex="0" role="button" title="${v.note.replace(/"/g,'&quot;')}">
+              <div class="variation-name">${v.name}</div>
+              <p>${v.note}</p>
+            </div>`).join('')}
+        </div>
       </div>`;
     }
     html += `<button class="btn" id="returnTrainBtn" style="display:none;">Повернутись до тренування</button>`;
@@ -2383,16 +2403,21 @@ function renderOpeningHeader(){
   }
   itemHeaderEl.innerHTML = html;
 
-  itemHeaderEl.querySelectorAll('.line-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if(isReplaying) return;
-      const kind = btn.dataset.lineKind;
-      if(kind === 'preview'){
-        startLineReplay(op, {name: op.name, moves: op.moves, note: op.description}, 'preview', op.moveComments);
-        return;
-      }
+  const runLineBtn = (btn)=>{
+    if(isReplaying) return;
+    const kind = btn.dataset.lineKind;
+    if(kind === 'preview'){
+      startLineReplay(op, {name: op.name, moves: op.moves, note: op.description}, 'preview', op.moveComments);
+    } else {
       const line = kind === 'trap' ? t.trap : t.variations[+btn.dataset.lineIndex];
       startLineReplay(op, line, kind);
+    }
+    scrollToBoard();
+  };
+  itemHeaderEl.querySelectorAll('.line-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>runLineBtn(btn));
+    btn.addEventListener('keydown', (e)=>{
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); runLineBtn(btn); }
     });
   });
   const returnBtn = document.getElementById('returnTrainBtn');
@@ -2655,6 +2680,13 @@ function finishEndgamePuzzle(){
 
 /* ===================== ДОШКА ===================== */
 
+// Дошка стоїть нижче тексту теорії за висотою сторінки — після вибору
+// дебюту чи лінії прокручуємо саме до неї, а не лише до верху панелі.
+function scrollToBoard(){
+  const el = document.getElementById('boardWrap');
+  if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+}
+
 function renderBoard(){
   boardEl.innerHTML = '';
   const board = chess.board(); // board[0] = rank8 ... board[7] = rank1
@@ -2683,11 +2715,13 @@ function renderBoard(){
       if(lastMove && (lastMove.to === squareName)) sqEl.classList.add('last-to');
 
       if(piece){
-        const span = document.createElement('span');
-        span.className = 'piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
-        if(dragActive && dragFromSquare === squareName) span.classList.add('dragging-source');
-        span.textContent = pieceGlyph(piece);
-        sqEl.appendChild(span);
+        const img = document.createElement('img');
+        img.className = 'piece';
+        img.draggable = false;
+        img.alt = '';
+        if(dragActive && dragFromSquare === squareName) img.classList.add('dragging-source');
+        img.src = pieceImgSrc(piece);
+        sqEl.appendChild(img);
       }
 
       if(displayCol === 0){
@@ -2709,10 +2743,10 @@ function renderBoard(){
   }
 }
 
-function pieceGlyph(piece){
-  const whiteGlyphs = {p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'};
-  const blackGlyphs = {p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
-  return piece.color === 'w' ? whiteGlyphs[piece.type] : blackGlyphs[piece.type];
+// Фігурки — набір cburnett (той самий, що в Lichess і Wikipedia),
+// CC BY-SA 3.0 / GFDL, автор Colin M.L. Burnett.
+function pieceImgSrc(piece){
+  return 'pieces/' + piece.color + piece.type.toUpperCase() + '.svg';
 }
 
 function renderMoveList(){
@@ -2775,9 +2809,11 @@ function beginDrag(e, squareName, piece){
   dragStartX = e.clientX;
   dragStartY = e.clientY;
 
-  dragGhostEl = document.createElement('div');
-  dragGhostEl.className = 'drag-ghost piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
-  dragGhostEl.textContent = pieceGlyph(piece);
+  dragGhostEl = document.createElement('img');
+  dragGhostEl.className = 'drag-ghost piece';
+  dragGhostEl.draggable = false;
+  dragGhostEl.alt = '';
+  dragGhostEl.src = pieceImgSrc(piece);
   dragGhostEl.style.left = e.clientX + 'px';
   dragGhostEl.style.top = e.clientY + 'px';
   dragGhostEl.style.visibility = 'hidden';
@@ -2786,7 +2822,11 @@ function beginDrag(e, squareName, piece){
   renderBoard();
 
   const originEl = boardEl.querySelector('.sq[data-square="' + squareName + '"] .piece');
-  if(originEl){ dragGhostEl.style.fontSize = getComputedStyle(originEl).fontSize; }
+  if(originEl){
+    const rect = originEl.getBoundingClientRect();
+    dragGhostEl.style.width = rect.width + 'px';
+    dragGhostEl.style.height = rect.height + 'px';
+  }
 }
 
 function updateDragHover(clientX, clientY){
