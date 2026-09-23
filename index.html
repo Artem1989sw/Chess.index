@@ -141,7 +141,6 @@
       padding-bottom:6px;
     }
     .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
-    .item-list .item-row{flex:0 0 auto;}
   }
 
   .item-list{
@@ -205,8 +204,6 @@
   }
   .item-btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
 
-  .item-row{display:flex;align-items:stretch;gap:4px;}
-  .item-row .item-btn{flex:1 1 auto;min-width:0;}
   .rep-star{
     appearance:none;
     flex:0 0 auto;
@@ -1377,7 +1374,6 @@ let botHintsOn = false;
 let botEngine = null;   // грає ходи за суперника (обмежена сила через UCI_LimitStrength)
 let helperEngine = null; // завжди повної сили — рахує чесну оцінку й підказки, незалежно від рівня суперника
 let engineThinking = false;
-let botPositionToken = 0; // зростає при undo/reset, щоб проігнорувати застарілу відповідь рушія
 
 /* drag & drop state */
 let dragActive = false;
@@ -1518,6 +1514,24 @@ function resetInfoPanels(){
   freePlayBox.style.display = 'none';
   analysisBtnBox.style.display = 'none';
 }
+
+// Спільне завершення задачі (тактика/CCT/ендшпіль-пазл): однакова логіка
+// серії, позначення прогресу, статусу й пояснення — різниться лише ключ
+// прогресу та сам предмет.
+function finishTrainingItem(progKey, item){
+  streak++;
+  markCompleted(progKey, item.id);
+  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
+  explainBox.style.display = 'block';
+  explainBox.textContent = item.explanation;
+  renderItemList();
+}
+// Неправильна спроба в тактиці/CCT/ендшпіль-пазлі: скидає серію й показує повідомлення.
+function wrongAttempt(msg){
+  renderBoard();
+  if(streak > 0){ streak = 0; updateStatsLine(); }
+  setStatus(msg, 'err');
+}
 const statsLine = document.getElementById('statsLine');
 const themeToggleBtn = document.getElementById('themeToggle');
 
@@ -1603,7 +1617,6 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
     setStatus('Хід скасовано. Спробуй ще раз.', '');
   } else if(currentTab === 'bot'){
     engineThinking = false;
-    botPositionToken++; // застаріла відповідь рушія, що йшла в дорозі, більше не застосовується
     if(chess.turn() !== userColor){
       chess.undo();
     }
@@ -1680,35 +1693,15 @@ function renderItemList(){
     const dot = it.difficulty ? `<span class="diff-dot ${it.difficulty}" title="${DIFFICULTY_LABELS[it.difficulty]}"></span>` : '';
     const dueNoteHtml = dueNoteText ? `<span class="item-due-note">${dueNoteText}</span>` : '';
     b.innerHTML = `<span class="item-label">${dot}<span class="item-label-text"><span class="txt">${it.name || it.theme}</span>${dueNoteHtml}</span></span><span class="badge">${due ? '↻' : ''}</span>`;
+    // Ця функція рендерить пункти лише для вкладок ендшпілів/тактики/CCT —
+    // дебюти мають окремий рендер картками (addOpeningCard нижче).
     b.addEventListener('click', ()=>{
-      if(currentTab === 'openings') selectOpening(it.id);
-      else if(currentTab === 'endgames') selectEndgame(it.id);
+      if(currentTab === 'endgames') selectEndgame(it.id);
       else if(currentTab === 'cct') selectCCT(it.id);
       else selectPuzzle(it.id);
     });
     b.dataset.id = it.id;
-    if(currentTab === 'openings'){
-      // Зірочка — окрема кнопка поряд, а не всередині item-btn (вкладати
-      // <button> в <button> не можна — браузер поламає розмітку).
-      const row = document.createElement('div');
-      row.className = 'item-row';
-      const star = document.createElement('button');
-      star.type = 'button';
-      const mine = isInRepertoire(it.id);
-      star.className = 'rep-star' + (mine ? ' active' : '');
-      star.title = mine ? 'Прибрати з мого репертуару' : 'Додати до мого репертуару';
-      star.textContent = mine ? '★' : '☆';
-      star.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        toggleRepertoire(it.id);
-        renderItemList();
-      });
-      row.appendChild(b);
-      row.appendChild(star);
-      itemListEl.appendChild(row);
-    } else {
-      itemListEl.appendChild(b);
-    }
+    itemListEl.appendChild(b);
   };
 
   const addOpeningCard = (it)=>{
@@ -1848,75 +1841,64 @@ function renderItemList(){
   updateStatsLine();
 }
 
-function renderDifficultyFilter(){
+// Спільний рендер рядка кнопок-фільтрів (.diff-btn у .diff-filter) — різні
+// вкладки різняться лише набором опцій, поточним активним ключем і тим, що
+// робити при виборі.
+function renderFilterRow(options, activeKey, onSelect){
   const filterEl = document.createElement('div');
   filterEl.className = 'diff-filter';
-  const options = [
-    {key:'all', label:'Всі'},
-    {key:'easy', label:'Легкі'},
-    {key:'medium', label:'Середні'},
-    {key:'hard', label:'Складні'}
-  ];
   options.forEach(opt=>{
     const btn = document.createElement('button');
-    btn.className = 'diff-btn' + (tacticsFilter === opt.key ? ' active' : '');
-    const count = opt.key === 'all' ? PUZZLES.length : PUZZLES.filter(p=>p.difficulty===opt.key).length;
-    btn.textContent = `${opt.label} (${count})`;
-    btn.addEventListener('click', ()=>{
-      tacticsFilter = opt.key;
+    btn.className = 'diff-btn' + (activeKey === opt.key ? ' active' : '');
+    if(opt.title) btn.title = opt.title;
+    btn.textContent = opt.label;
+    btn.addEventListener('click', ()=>onSelect(opt.key));
+    filterEl.appendChild(btn);
+  });
+  itemListEl.appendChild(filterEl);
+}
+
+function renderDifficultyFilter(){
+  const labels = {all:'Всі', easy:'Легкі', medium:'Середні', hard:'Складні'};
+  renderFilterRow(
+    ['all','easy','medium','hard'].map(key=>({
+      key,
+      label: `${labels[key]} (${key === 'all' ? PUZZLES.length : PUZZLES.filter(p=>p.difficulty===key).length})`
+    })),
+    tacticsFilter,
+    (key)=>{
+      tacticsFilter = key;
       renderItemList();
       const filtered = tacticsFilter === 'all' ? PUZZLES : PUZZLES.filter(p=>p.difficulty===tacticsFilter);
       if(filtered.length && (!currentPuzzle || !filtered.some(p=>p.id===currentPuzzle.id))){
         selectPuzzle(filtered[0].id);
       }
-    });
-    filterEl.appendChild(btn);
-  });
-  itemListEl.appendChild(filterEl);
+    }
+  );
 }
 
 function renderOpeningsFilter(){
-  const filterEl = document.createElement('div');
-  filterEl.className = 'diff-filter';
-  const options = [
-    {key:'all', label:'Всі'},
-    {key:'white', label:'За білих'},
-    {key:'black', label:'За чорних'},
-    {key:'mine', label:'★ Мій репертуар'}
-  ];
-  options.forEach(opt=>{
-    const btn = document.createElement('button');
-    btn.className = 'diff-btn' + (openingsFilter === opt.key ? ' active' : '');
-    btn.textContent = opt.label;
-    btn.addEventListener('click', ()=>{
-      openingsFilter = opt.key;
-      renderItemList();
-    });
-    filterEl.appendChild(btn);
-  });
-  itemListEl.appendChild(filterEl);
+  renderFilterRow(
+    [
+      {key:'all', label:'Всі'},
+      {key:'white', label:'За білих'},
+      {key:'black', label:'За чорних'},
+      {key:'mine', label:'★ Мій репертуар'}
+    ],
+    openingsFilter,
+    (key)=>{ openingsFilter = key; renderItemList(); }
+  );
 }
 
 function renderStrictnessToggle(){
-  const filterEl = document.createElement('div');
-  filterEl.className = 'diff-filter';
-  const options = [
-    {key:'strict', label:'🎓 Строго', title:'Суворіша перевірка принципів у вільній частині — краще для новачків'},
-    {key:'soft', label:'♟ М\'яко', title:'М\'якша перевірка: дозволяє ранній вихід ферзя, крайні пішаки й гострі жертви — для досвідченіших'}
-  ];
-  options.forEach(opt=>{
-    const btn = document.createElement('button');
-    btn.className = 'diff-btn' + (strictness === opt.key ? ' active' : '');
-    btn.title = opt.title;
-    btn.textContent = opt.label;
-    btn.addEventListener('click', ()=>{
-      strictness = opt.key;
-      saveStrictness(strictness);
-      renderItemList();
-    });
-    filterEl.appendChild(btn);
-  });
-  itemListEl.appendChild(filterEl);
+  renderFilterRow(
+    [
+      {key:'strict', label:'🎓 Строго', title:'Суворіша перевірка принципів у вільній частині — краще для новачків'},
+      {key:'soft', label:'♟ М\'яко', title:'М\'якша перевірка: дозволяє ранній вихід ферзя, крайні пішаки й гострі жертви — для досвідченіших'}
+    ],
+    strictness,
+    (key)=>{ strictness = key; saveStrictness(strictness); renderItemList(); }
+  );
 }
 
 function updateActiveItem(){
@@ -2331,7 +2313,7 @@ function renderEvalSparkline(){
     const idx = Math.round((val + CAP) / (2 * CAP) * (BLOCKS.length - 1));
     return BLOCKS[idx];
   }).join('');
-  return `<p class="idea eval-strip"><strong>Стрічка оцінки:</strong> <span class="eval-strip-line" title="Кожен символ — оцінка позиції на момент твого чергового ходу: нижче — гірше для тебе, вище — краще">${chars}</span></p>`;
+  return `<p class="idea"><strong>Стрічка оцінки:</strong> <span class="eval-strip-line" title="Кожен символ — оцінка позиції на момент твого чергового ходу: нижче — гірше для тебе, вище — краще">${chars}</span></p>`;
 }
 
 // Коротке резюме вільної частини — скільки ходів рушій вважав найкращими чи
@@ -2574,12 +2556,7 @@ function normalizeSan(s){
 
 function finishPuzzle(){
   puzzleSolved = true;
-  streak++;
-  markCompleted(PROG_KEY_TACTICS, currentPuzzle.id);
-  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
-  explainBox.style.display = 'block';
-  explainBox.textContent = currentPuzzle.explanation;
-  renderItemList();
+  finishTrainingItem(PROG_KEY_TACTICS, currentPuzzle);
 }
 
 /* ===================== CCT: ШАХИ · ВЗЯТТЯ · ЗАГРОЗИ ===================== */
@@ -2633,12 +2610,7 @@ function selectCCT(id){
 
 function finishCCT(){
   cctSolved = true;
-  streak++;
-  markCompleted(PROG_KEY_CCT, currentCCT.id);
-  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
-  explainBox.style.display = 'block';
-  explainBox.textContent = currentCCT.explanation;
-  renderItemList();
+  finishTrainingItem(PROG_KEY_CCT, currentCCT);
 }
 
 /* ===================== ЕНДШПІЛІ ===================== */
@@ -2703,40 +2675,34 @@ function selectEndgame(id){
 
 function finishEndgamePuzzle(){
   endgamePuzzleSolved = true;
-  streak++;
-  markCompleted(PROG_KEY_ENDGAMES, currentEndgameItem.id);
-  setStatus('Правильно!' + (streak > 1 ? ' Серія: ' + streak + ' 🔥' : ''), 'win');
-  explainBox.style.display = 'block';
-  explainBox.textContent = currentEndgameItem.explanation;
-  renderItemList();
+  finishTrainingItem(PROG_KEY_ENDGAMES, currentEndgameItem);
 }
 
 /* ===================== ДОШКА ===================== */
 
-// Дошка стоїть нижче тексту теорії за висотою сторінки — після вибору
-// дебюту чи лінії прокручуємо саме до неї, а не лише до верху панелі.
-// Рахуємо цільову позицію вручну (а не scrollIntoView) — так надійніше
-// спрацьовує одразу після innerHTML-перерендеру заголовка/картки.
-function scrollToBoard(){
-  const el = document.getElementById('boardWrap');
+// Спільний плавний скрол до елемента, зміщений на offset(rect) пікселів
+// від його верху. Рахуємо позицію вручну (а не scrollIntoView) — так
+// надійніше спрацьовує одразу після innerHTML-перерендеру заголовка/картки.
+function scrollToElement(el, offset){
   if(!el) return;
   requestAnimationFrame(()=>{
     const rect = el.getBoundingClientRect();
-    const targetY = window.scrollY + rect.top - Math.max(16, (window.innerHeight - rect.height) / 2);
+    const targetY = window.scrollY + rect.top - offset(rect);
     window.scrollTo({top: Math.max(0, targetY), behavior: 'smooth'});
   });
+}
+
+// Дошка стоїть нижче тексту теорії за висотою сторінки — після вибору
+// лінії прокручуємо саме до неї (по центру екрана), а не лише до верху панелі.
+function scrollToBoard(){
+  scrollToElement(document.getElementById('boardWrap'), rect => Math.max(16, (window.innerHeight - rect.height) / 2));
 }
 
 // При першому розкритті панелі деталей дебюту скролимо до її верху
 // (заголовок і теорія), а не одразу до дошки нижче — інакше користувач
 // не бачить, який саме дебют відкрився.
 function scrollToPanelTop(){
-  if(!mainPanelEl) return;
-  requestAnimationFrame(()=>{
-    const rect = mainPanelEl.getBoundingClientRect();
-    const targetY = window.scrollY + rect.top - 12;
-    window.scrollTo({top: Math.max(0, targetY), behavior: 'smooth'});
-  });
+  scrollToElement(mainPanelEl, () => 12);
 }
 
 function renderBoard(){
@@ -3032,9 +2998,7 @@ function attemptMove(from, to){
         renderMoveList();
         finishEndgamePuzzle();
       } else {
-        renderBoard();
-        if(streak > 0){ streak = 0; updateStatsLine(); }
-        setStatus('Не зовсім. Спробуй ще раз.', 'err');
+        wrongAttempt('Не зовсім. Спробуй ще раз.');
       }
     }
   } else if(currentTab === 'cct'){
@@ -3045,9 +3009,7 @@ function attemptMove(from, to){
       renderMoveList();
       finishCCT();
     } else {
-      renderBoard();
-      if(streak > 0){ streak = 0; updateStatsLine(); }
-      setStatus('Не зовсім. Ще раз пройди CCT-чекліст і спробуй ще.', 'err');
+      wrongAttempt('Не зовсім. Ще раз пройди CCT-чекліст і спробуй ще.');
     }
   } else if(currentTab === 'bot'){
     const mv = chess.move(candidate);
@@ -3067,9 +3029,7 @@ function attemptMove(from, to){
       renderMoveList();
       finishPuzzle();
     } else {
-      renderBoard();
-      if(streak > 0){ streak = 0; updateStatsLine(); }
-      setStatus('Не зовсім. Спробуй ще раз.', 'err');
+      wrongAttempt('Не зовсім. Спробуй ще раз.');
     }
   }
 }
@@ -3294,7 +3254,6 @@ function syncBotPosition(){
   if(isBotTurn && botEngine && botEngine.ready && !botEngine.failed){
     engineThinking = true;
     setStatus('Хід суперника (Stockfish думає...)', 'engine-thinking');
-    const requestedFen = fen;
     botEngine.request(fen, 'go movetime 700', (uci)=>{
       engineThinking = false;
       if(!uci) return;
@@ -3382,21 +3341,15 @@ botHintsToggleEl.addEventListener('change', ()=>{
 });
 
 function renderBotColorPicker(){
-  const filterEl = document.createElement('div');
-  filterEl.className = 'diff-filter';
-  const options = [
-    {key:'w', label:'Білими'},
-    {key:'b', label:'Чорними'},
-    {key:'random', label:'Випадково'}
-  ];
-  options.forEach(opt=>{
-    const btn = document.createElement('button');
-    btn.className = 'diff-btn' + (botColor === opt.key ? ' active' : '');
-    btn.textContent = opt.label;
-    btn.addEventListener('click', ()=>{ selectBot(opt.key); });
-    filterEl.appendChild(btn);
-  });
-  itemListEl.appendChild(filterEl);
+  renderFilterRow(
+    [
+      {key:'w', label:'Білими'},
+      {key:'b', label:'Чорними'},
+      {key:'random', label:'Випадково'}
+    ],
+    botColor,
+    (key)=>selectBot(key)
+  );
 }
 
 function renderBotLevelPicker(){
@@ -3436,7 +3389,6 @@ function selectBot(colorChoice){
   flipped = userColor === 'b';
   selected = null; legalTargets = []; lastMove = null;
   engineThinking = false;
-  botPositionToken++;
   resetInfoPanels();
   evalColEl.style.display = 'flex';
   botBoxEl.style.display = 'block';
