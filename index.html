@@ -489,12 +489,17 @@
     transition:border-color .15s;
   }
   .variation-item:hover, .variation-item:focus-visible{border-color:var(--gold);outline:none;}
+  .variation-item.done{box-shadow:inset 3px 0 0 var(--olive);}
+  .variation-item.due{box-shadow:inset 3px 0 0 var(--gold);}
   .variation-item .variation-name{
     font-weight:600;
     font-size:0.84rem;
     color:var(--gold-soft);
     margin-bottom:2px;
   }
+  .variation-status{display:inline-block;margin-left:6px;font-size:0.78rem;}
+  .variation-status.done{color:var(--olive);}
+  .variation-status.due{color:var(--gold-soft);}
   .variation-item p{
     font-size:0.78rem;
     color:var(--text-muted);
@@ -1332,6 +1337,7 @@ const CCT_PUZZLES = [
 let currentTab = 'openings';
 let currentOpening = null;
 let openingDetailOpen = false; // чи розкрита панель деталей дебюту (вкладка "Дебюти" стартує лише зі списком карток)
+let currentVariationIndex = null; // null = тренуємо основну лінію; інакше — індекс у currentOpening.theory.variations
 let currentPuzzle = null;
 let currentEndgameItem = null;
 let currentCCT = null;
@@ -1391,6 +1397,7 @@ function clearReplayTimers(){
 }
 
 const PROG_KEY_OPENINGS = 'chess_trainer_openings_progress_v1';
+const PROG_KEY_OPENING_VARIATIONS = 'chess_trainer_opening_variations_progress_v1';
 const PROG_KEY_TACTICS = 'chess_trainer_tactics_progress_v1';
 const PROG_KEY_ENDGAMES = 'chess_trainer_endgames_progress_v1';
 const PROG_KEY_CCT = 'chess_trainer_cct_progress_v1';
@@ -1574,7 +1581,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
-  if(currentTab === 'openings') selectOpening(currentOpening.id);
+  if(currentTab === 'openings') selectOpening(currentOpening.id, currentVariationIndex);
   else if(currentTab === 'endgames') selectEndgame(currentEndgameItem.id);
   else if(currentTab === 'cct') selectCCT(currentCCT.id);
   else if(currentTab === 'bot') selectBot(botColor);
@@ -2146,6 +2153,27 @@ function openingCoreHalfMoves(op){
   return Math.min(core, op.moves.length);
 }
 
+// Тренування може йти або по основній лінії дебюту (currentOpening.moves),
+// або, якщо обрано конкретний варіант відповіді суперника, по його власній
+// повній лінії (currentOpening.theory.variations[i].moves) — ці три функції
+// абстрагують "яку саме лінію зараз проходимо", щоб attemptMove/engineAutoPlay
+// не дублювали логіку для обох випадків.
+function activeVariation(){
+  if(currentVariationIndex === null || !currentOpening || !currentOpening.theory) return null;
+  return currentOpening.theory.variations[currentVariationIndex] || null;
+}
+function activeLineMoves(){
+  const v = activeVariation();
+  return v ? v.moves : currentOpening.moves;
+}
+function activeLineHalfMoves(){
+  return openingCoreHalfMoves({coreMoves: currentOpening.coreMoves, moves: activeLineMoves()});
+}
+function activeVariationProgId(){
+  const v = activeVariation();
+  return v ? (currentOpening.id + '::' + v.name) : null;
+}
+
 function findKingSquare(color, src){
   const board = (src || chess).board();
   for(let r=0;r<8;r++){
@@ -2345,10 +2373,14 @@ function renderPrincipleAnalysisHtml(){
 
 /* ===================== ДЕБЮТИ ===================== */
 
-function selectOpening(id){
+// variationIndex: якщо задано — тренуємо саме цей варіант відповіді
+// суперника (currentOpening.theory.variations[variationIndex]) замість
+// основної обов'язкової лінії дебюту.
+function selectOpening(id, variationIndex){
   clearReplayTimers();
   if(dragActive){ cleanupDrag(); }
   currentOpening = OPENINGS.find(o=>o.id===id);
+  currentVariationIndex = (variationIndex === undefined) ? null : variationIndex;
   chess = new Chess();
   moveIndex = 0;
   freePlay = false;
@@ -2363,7 +2395,10 @@ function selectOpening(id){
   renderOpeningHeader();
   renderBoard();
   renderMoveList();
-  setStatus(`Твій хід. Спробуй знайти правильний перший хід ${currentOpening.side === 'white' ? 'білими' : 'чорними'}.`, '');
+  const variation = activeVariation();
+  setStatus(variation
+    ? `Твій хід. Суперник щойно зіграв варіант «${variation.name}» — знайди правильну відповідь.`
+    : `Твій хід. Спробуй знайти правильний перший хід ${currentOpening.side === 'white' ? 'білими' : 'чорними'}.`, '');
 
   if(userColor === 'b'){
     setTimeout(engineAutoPlay, 400);
@@ -2372,6 +2407,11 @@ function selectOpening(id){
 
 function renderOpeningHeader(){
   const op = currentOpening;
+  const variation = activeVariation();
+  if(variation){
+    renderVariationHeader(op, variation);
+    return;
+  }
   const t = op.theory;
   let html = `
     <div class="eco">${op.eco} · ${op.side === 'white' ? 'граєш за білих' : 'граєш за чорних'} · обов'язкова частина: ${op.coreMoves} ${op.coreMoves === 1 ? 'хід' : 'ходів'}</div>
@@ -2402,14 +2442,22 @@ function renderOpeningHeader(){
       </div>`;
     }
     if(t.variations && t.variations.length){
+      const varProg = loadProgress(PROG_KEY_OPENING_VARIATIONS);
       html += `<div class="variations-box">
         <h4>Варіанти відповіді суперника</h4>
+        <p class="hint-text" style="margin-top:0;">Клік — почати тренувати саме цей варіант: гратимеш проти нього так само, як основну лінію.</p>
         <div class="variations-grid">
-          ${t.variations.map((v,i)=>`
-            <div class="variation-item line-btn" data-line-kind="variation" data-line-index="${i}" tabindex="0" role="button" title="${v.note.replace(/"/g,'&quot;')}">
-              <div class="variation-name">${v.name}</div>
+          ${t.variations.map((v,i)=>{
+            const entry = varProg[op.id + '::' + v.name];
+            const vDue = isDue(entry), vDone = isDone(entry);
+            const statusCls = vDue ? ' due' : vDone ? ' done' : '';
+            const badge = vDue ? '<span class="variation-status due">↻</span>' : vDone ? '<span class="variation-status done">✓</span>' : '';
+            return `
+            <div class="variation-item line-btn${statusCls}" data-line-kind="variation" data-line-index="${i}" tabindex="0" role="button" title="${v.note.replace(/"/g,'&quot;')}">
+              <div class="variation-name">${v.name}${badge}</div>
               <p>${v.note}</p>
-            </div>`).join('')}
+            </div>`;
+          }).join('')}
         </div>
       </div>`;
     }
@@ -2423,11 +2471,14 @@ function renderOpeningHeader(){
     const kind = btn.dataset.lineKind;
     if(kind === 'preview'){
       startLineReplay(op, {name: op.name, moves: op.moves, note: op.description}, 'preview', op.moveComments);
-    } else {
-      const line = kind === 'trap' ? t.trap : t.variations[+btn.dataset.lineIndex];
-      startLineReplay(op, line, kind);
+      scrollToBoard();
+    } else if(kind === 'trap'){
+      startLineReplay(op, t.trap, 'trap');
+      scrollToBoard();
+    } else if(kind === 'variation'){
+      selectOpening(op.id, +btn.dataset.lineIndex);
+      scrollToBoard();
     }
-    scrollToBoard();
   };
   itemHeaderEl.querySelectorAll('.line-btn').forEach(btn=>{
     btn.addEventListener('click', ()=>runLineBtn(btn));
@@ -2439,6 +2490,25 @@ function renderOpeningHeader(){
   if(returnBtn){
     returnBtn.addEventListener('click', ()=>selectOpening(op.id));
   }
+}
+
+// Компактний заголовок, поки тренуємо конкретний варіант (а не основну
+// лінію) — без повторення всієї теорії дебюту, лише назва варіанту, чому
+// він відрізняється, і статус SRS-повторення саме для нього.
+function renderVariationHeader(op, variation){
+  const progId = activeVariationProgId();
+  const entry = loadProgress(PROG_KEY_OPENING_VARIATIONS)[progId];
+  const due = isDue(entry), done = isDone(entry);
+  const dueNoteText = (entry && typeof entry === 'object' && entry.dueAt && !due) ? `Наступне повторення: ${formatDueIn(entry.dueAt)}` : '';
+  const statusLabel = due ? '↻ Час повторити цей варіант' : done ? '✓ Варіант пройдено' : (dueNoteText || 'Ще не пройдено');
+
+  itemHeaderEl.innerHTML = `
+    <div class="eco">${op.eco} · варіант ${currentVariationIndex + 1} з ${op.theory.variations.length} · ${op.side === 'white' ? 'граєш за білих' : 'граєш за чорних'}</div>
+    <h2>${op.name} — ${variation.name}</h2>
+    <p>${variation.note}</p>
+    <p class="hint-text" style="margin-top:0;">${statusLabel} · перші ${op.coreMoves} ходів — точна лінія, далі приймається будь-який хід за принципами.</p>
+    <button class="btn" id="backToOverviewBtn">← Усі варіанти дебюту</button>`;
+  document.getElementById('backToOverviewBtn').addEventListener('click', ()=>selectOpening(op.id));
 }
 
 function startLineReplay(op, line, kind, comments){
@@ -2479,20 +2549,20 @@ function startLineReplay(op, line, kind, comments){
 
 function engineAutoPlay(){
   if(!currentOpening) return;
-  const coreLen = openingCoreHalfMoves(currentOpening);
+  const coreLen = activeLineHalfMoves();
   if(moveIndex >= coreLen){
     engineFreePlayMove();
     return;
   }
   const playedIndex = moveIndex;
-  const san = currentOpening.moves[moveIndex];
+  const san = activeLineMoves()[moveIndex];
   const mv = chess.move(san);
   if(!mv) return;
   lastMove = mv;
   moveIndex++;
   renderBoard();
   renderMoveList();
-  showMoveComment(currentOpening, playedIndex);
+  if(currentVariationIndex === null) showMoveComment(currentOpening, playedIndex);
   if(moveIndex >= coreLen){
     finishOpening();
   } else {
@@ -2513,13 +2583,19 @@ function showMoveComment(op, idx){
 function finishOpening(){
   principleMode = true;
   principleMoveLog = [];
-  markCompleted(PROG_KEY_OPENINGS, currentOpening.id);
+  const variation = activeVariation();
+  if(variation){
+    markCompleted(PROG_KEY_OPENING_VARIATIONS, activeVariationProgId());
+  } else {
+    markCompleted(PROG_KEY_OPENINGS, currentOpening.id);
+  }
   renderItemList();
   freePlayBox.style.display = 'block';
+  const doneMsg = variation ? 'Варіант пройдено!' : 'Обов\'язкову частину дебюту пройдено!';
   if(chess.turn() === userColor){
-    setStatus('Обов\'язкову частину дебюту пройдено! Тепер продовжуй сам за принципами: розвиток фігур, боротьба за центр, безпека короля.', 'win');
+    setStatus(doneMsg + ' Тепер продовжуй сам за принципами: розвиток фігур, боротьба за центр, безпека короля.', 'win');
   } else {
-    setStatus('Обов\'язкову частину дебюту пройдено! Хід суперника...', 'win');
+    setStatus(doneMsg + ' Хід суперника...', 'win');
     setTimeout(engineFreePlayMove, 500);
   }
 }
@@ -2958,8 +3034,8 @@ function attemptMove(from, to){
       }
       return;
     }
-    const coreLen = openingCoreHalfMoves(currentOpening);
-    const expected = currentOpening.moves[moveIndex];
+    const coreLen = activeLineHalfMoves();
+    const expected = activeLineMoves()[moveIndex];
     if(candidate.san === expected){
       const playedIndex = moveIndex;
       const mv = chess.move(candidate);
@@ -2967,7 +3043,7 @@ function attemptMove(from, to){
       moveIndex++;
       renderBoard();
       renderMoveList();
-      showMoveComment(currentOpening, playedIndex);
+      if(currentVariationIndex === null) showMoveComment(currentOpening, playedIndex);
       if(moveIndex >= coreLen){
         finishOpening();
       } else {
