@@ -573,13 +573,28 @@
   .analyzer-progress{font-size:0.78rem;color:var(--text-muted);min-height:1.2em;margin-top:2px;}
   .analyzer-progress.err{color:#D98A75;}
 
+  .move-strip-row{display:flex;align-items:center;gap:6px;margin-bottom:10px;border-bottom:1px solid var(--line);padding-bottom:10px;}
+  .strip-arrow-btn{
+    flex:0 0 auto;
+    width:30px;height:30px;
+    border-radius:50%;
+    border:none;
+    background:var(--gold);
+    color:#241811;
+    font-size:1rem;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .strip-arrow-btn:hover{background:var(--gold-soft);}
   .move-strip{
     display:flex;
     gap:4px;
     overflow-x:auto;
-    padding:4px 2px 10px;
-    margin-bottom:10px;
-    border-bottom:1px solid var(--line);
+    padding:4px 2px 0;
+    flex:1 1 auto;
+    min-width:0;
   }
   .move-chip{
     flex:0 0 auto;
@@ -623,6 +638,13 @@
 
   .analyzer-detail{margin-bottom:12px;min-height:1.2em;}
   .analyzer-detail .played-line{font-size:0.85rem;margin-bottom:8px;display:flex;align-items:center;flex-wrap:wrap;gap:6px;}
+  .branch-notice{
+    display:flex;align-items:center;flex-wrap:wrap;gap:8px;justify-content:space-between;
+    font-size:0.82rem;color:var(--gold-soft);
+    background:var(--panel-2);border:1px solid var(--gold);border-radius:6px;
+    padding:8px 10px;margin-bottom:10px;
+  }
+  .branch-notice .btn{padding:4px 10px;font-size:0.78rem;}
   .analyzer-summary{font-size:0.82rem;color:var(--text-muted);margin-bottom:12px;}
   .analyzer-summary strong{color:var(--text);}
 
@@ -715,7 +737,11 @@
             <div class="engine-lines" id="engineLinesBox"></div>
           </div>
           <div id="analyzerBox" style="display:none;">
-            <div id="analyzerMoveStrip" class="move-strip"></div>
+            <div class="move-strip-row">
+              <button type="button" class="strip-arrow-btn" id="analyzerStripPrevBtn" title="Попередній хід">‹</button>
+              <div id="analyzerMoveStrip" class="move-strip"></div>
+              <button type="button" class="strip-arrow-btn" id="analyzerStripNextBtn" title="Наступний хід">›</button>
+            </div>
             <svg id="analyzerGraph" class="eval-graph" viewBox="0 0 600 130" preserveAspectRatio="none"></svg>
             <div id="analyzerDetail" class="analyzer-detail"></div>
             <div id="analyzerSummary" class="analyzer-summary"></div>
@@ -2567,7 +2593,7 @@ function setStatus(msg, kind){
 
 function onSquarePointerDown(e, squareName){
   if(isReplaying) return;
-  if(currentTab === 'analyzer') return; // дошка аналізатора лише для перегляду, ходів нею не роблять
+  if(currentTab === 'analyzer' && chess.game_over()) return; // партія на дошці аналізатора скінчилась — нема чим ходити
   if(currentTab === 'tactics' && puzzleSolved) return;
   if(currentTab === 'cct' && cctSolved) return;
   if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return;
@@ -2803,6 +2829,10 @@ function attemptMove(from, to){
     } else {
       syncBotPosition();
     }
+  } else if(currentTab === 'analyzer'){
+    const fenBefore = chess.fen();
+    const mv = chess.move(candidate);
+    analyzerPlayUserMove(fenBefore, mv);
   } else {
     if(currentPuzzle.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
       const mv = chess.move(candidate);
@@ -3337,6 +3367,13 @@ let analyzerEngine = null;
 let analyzerEngineMultiPV = null;
 let analyzerRunning = false;
 let analyzerGen = 0;            // той самий патерн інвалідації, що й principleGen
+// Власна гілка гравця: коли на дошці аналізатора граєш хід, що відхиляється
+// від завантаженої партії, він не змінює analyzerGame.plies (це запис
+// оригінальної партії), а йде сюди. fromPly — ход main line, від якого
+// відгалузились; moves — ходи гілки, кожен судиться live тим самим
+// judgeEngine, що й вільна частина дебютів.
+let analyzerBranch = null;      // null, або {fromPly, moves:[{san,from,to,fenBefore,fenAfter,pending,...}]}
+let analyzerBranchIdx = 0;      // 0..branch.moves.length — скільки ходів гілки зараз показано
 
 function formatWhiteCp(cpWhite){
   return (cpWhite/100 >= 0 ? '+' : '') + (cpWhite/100).toFixed(1);
@@ -3353,6 +3390,96 @@ function squareCenterPercent(square){
   const displayCol = flipped ? 7 - colIdx : colIdx;
   const displayRow = flipped ? 7 - rowIdx : rowIdx;
   return {xPct: (displayCol + 0.5) / 8 * 100, yPct: (displayRow + 0.5) / 8 * 100};
+}
+
+// Уніфікує "де ми зараз" — на записі завантаженої партії (analyzerPly) чи
+// всередині власної гілки гравця (analyzerBranch) — щоб рендер-функції не
+// дублювали цю розгалужену логіку кожна окремо.
+function analyzerCurrentFen(){
+  if(analyzerBranch && analyzerBranchIdx > 0) return analyzerBranch.moves[analyzerBranchIdx-1].fenAfter;
+  if(!analyzerGame) return null;
+  return analyzerPly === 0 ? analyzerGame.startFen : analyzerGame.plies[analyzerPly-1].fenAfter;
+}
+function analyzerCurrentEntry(){
+  if(analyzerBranch && analyzerBranchIdx > 0) return analyzerBranch.moves[analyzerBranchIdx-1];
+  if(!analyzerGame || analyzerPly === 0) return null;
+  return analyzerGame.plies[analyzerPly-1];
+}
+
+// Гравець зробив хід на дошці аналізатора, що відхиляється від запису
+// партії (або продовжує вже почату власну гілку). Хід одразу з'являється
+// на дошці; жива оцінка Stockfish (той самий рушій, що й вільна частина
+// дебютів) підтягується асинхронно й оновлює лише цей запис.
+function analyzerPlayUserMove(fenBefore, mv){
+  if(!analyzerBranch){
+    analyzerBranch = {fromPly: analyzerPly, moves: []};
+    analyzerBranchIdx = 0;
+  }
+  // Якщо гравець зараз не на кінчику гілки (повернувся назад і зіграв
+  // інакше) — "майбутнє" гілки обрізається, як у звичайному GUI.
+  analyzerBranch.moves = analyzerBranch.moves.slice(0, analyzerBranchIdx);
+  const entry = {
+    san: mv.san, from: mv.from, to: mv.to, color: mv.color,
+    fenBefore, fenAfter: chess.fen(),
+    pending: true, lossCp: null, cls: null, bestSanPv: null, bestUci: null,
+    altLines: [], mateAfter: null, whiteCpAfter: null
+  };
+  analyzerBranch.moves.push(entry);
+  analyzerBranchIdx = analyzerBranch.moves.length;
+  hintArrow1El.style.display = 'none';
+  hintArrow2El.style.display = 'none';
+  renderAnalyzerView();
+  analyzerJudgeBranchMove(entry);
+}
+
+function analyzerJudgeBranchMove(entry){
+  queueJudgeJob((done)=>{
+    initJudgeEngineIfNeeded(()=>{
+      analyzePosition(judgeEngine, entry.fenBefore, HELPER_ANALYSIS_DEPTH, (before)=>{
+        const moverColor = entry.fenBefore.split(' ')[1];
+        const beforeWhiteCp = cpFromFen(entry.fenBefore, before.lines[0]);
+        const bestSanPv = before.lines[0] ? pvToSanText(before.lines[0].pvUci, entry.fenBefore, 6) : '';
+        const altLines = before.lines.slice();
+        const finalize = (whiteCpAfter, mateAfter)=>{
+          const sign = moverColor === 'w' ? 1 : -1;
+          entry.lossCp = Math.max(0, Math.round(sign * (beforeWhiteCp - whiteCpAfter)));
+          entry.cls = classifyMoveLoss(entry.lossCp);
+          entry.whiteCpAfter = whiteCpAfter;
+          entry.mateAfter = mateAfter;
+          entry.bestUci = before.bestUci;
+          entry.bestSanPv = bestSanPv;
+          entry.altLines = altLines;
+          entry.pending = false;
+          if(analyzerBranch && analyzerBranch.moves.includes(entry)){
+            renderAnalyzerDetail();
+            renderAnalyzerMoveStrip();
+          }
+          done();
+        };
+        // Мат — рушію нема що аналізувати в позиції без ходів (той самий
+        // випадок, що й у пакетному аналізаторі партії).
+        if(new Chess(entry.fenAfter).in_checkmate()){
+          finalize(moverColor === 'w' ? 100000 : -100000, 0);
+          return;
+        }
+        analyzePosition(judgeEngine, entry.fenAfter, HELPER_ANALYSIS_DEPTH, (after)=>{
+          const afterLine = after.lines[0];
+          const afterWhiteCp = cpFromFen(entry.fenAfter, afterLine);
+          const afterSideToMove = entry.fenAfter.split(' ')[1];
+          const mateAfter = (afterLine && afterLine.mate != null) ? (afterSideToMove==='w'?afterLine.mate:-afterLine.mate) : null;
+          finalize(afterWhiteCp, mateAfter);
+        });
+      });
+    });
+  });
+}
+
+function analyzerExitBranch(){
+  analyzerBranch = null;
+  analyzerBranchIdx = 0;
+  hintArrow1El.style.display = 'none';
+  hintArrow2El.style.display = 'none';
+  renderAnalyzerView();
 }
 
 function parsePgnForAnalyzer(pgnText){
@@ -3543,51 +3670,145 @@ function renderAnalyzerMoveStrip(){
   if(!plies.length){ analyzerMoveStripEl.innerHTML = ''; return; }
   analyzerMoveStripEl.innerHTML = plies.map((p,i)=>{
     const meta = MOVE_QUALITY_META[p.cls];
-    const activeCls = (i+1 === analyzerPly) ? ' active' : '';
+    const activeCls = (!analyzerBranch && i+1 === analyzerPly) ? ' active' : '';
     const numPrefix = p.color === 'w' ? `<span style="opacity:.6">${p.moveNo}.</span>` : '';
     return `<button type="button" class="move-chip${activeCls}" data-ply="${i+1}" title="${meta.label} (${(p.lossCp/100).toFixed(2)} пішака)">${numPrefix}${p.san}<span class="chip-icon" style="background:${meta.color}">${meta.icon}</span></button>`;
   }).join('');
+  const activeChip = analyzerMoveStripEl.querySelector('.move-chip.active');
+  if(activeChip) activeChip.scrollIntoView({block:'nearest', inline:'center'});
 }
+
+// Сигмоїдне стиснення оцінки (той самий трюк, що й у lichess) замість
+// жорсткого лінійного обрізання: звичайна перевага в 0.5-2 пішаки вже дає
+// помітний рух лінії, а не тільки величезна перевага чи мат — і крива
+// плавно виходить на межу графіка замість різкого "плато".
+function evalToGraphY(cpWhite, mid, amp){
+  const winProb = 1 / (1 + Math.exp(-0.004 * cpWhite));
+  return mid - (winProb - 0.5) * 2 * amp;
+}
+
+// Оцінка реально гойдається на кожному півході навіть у рівній, добре
+// зіграній партії — пряма лінія через КОЖНУ точку через це виглядає як
+// кардіограма. Згладжуємо ковзним середнім по сусідніх ходах (сам сигнал
+// не чіпаємо — маркери грубих помилок нижче малюються по сирих значеннях).
+function smoothCpSeries(values, window){
+  const half = Math.floor(window/2);
+  return values.map((_, i)=>{
+    let sum = 0, count = 0;
+    for(let k=-half;k<=half;k++){
+      const idx = i+k;
+      if(idx >= 0 && idx < values.length){ sum += values[idx]; count++; }
+    }
+    return sum / count;
+  });
+}
+
+// Плавна крива через точки (квадратичні Безьє до середини кожного відрізка)
+// замість гострих зламів прямими лініями — той самий трюк, що дає лінії
+// на кшталт lichess/chess.com їхній "перетікаючий", а не пилкоподібний вигляд.
+function smoothSvgPath(pts){
+  if(pts.length < 3) return pts.map((p,i)=>(i===0?'M':'L')+p.x.toFixed(1)+','+p.y.toFixed(1)).join(' ');
+  let d = 'M' + pts[0].x.toFixed(1) + ',' + pts[0].y.toFixed(1);
+  for(let i=1;i<pts.length-1;i++){
+    const mx = (pts[i].x + pts[i+1].x) / 2, my = (pts[i].y + pts[i+1].y) / 2;
+    d += ' Q' + pts[i].x.toFixed(1) + ',' + pts[i].y.toFixed(1) + ' ' + mx.toFixed(1) + ',' + my.toFixed(1);
+  }
+  const last = pts[pts.length-1];
+  d += ' L' + last.x.toFixed(1) + ',' + last.y.toFixed(1);
+  return d;
+}
+
+const GRAPH_WINDOW = 20; // скільки півходів видно одночасно у "вікні" графіка
 
 function renderAnalyzerGraph(){
   const plies = analyzerGame ? analyzerGame.plies : [];
   const n = plies.length;
   if(!n){ analyzerGraphEl.innerHTML = ''; return; }
-  const W = 600, H = 130, MID = 65, CAP = 500, AMP = 58;
-  const pts = [{x:0, y:MID}];
-  plies.forEach((p,i)=>{
-    const cp = Math.max(-CAP, Math.min(CAP, p.whiteCpAfter));
-    pts.push({x: ((i+1)/n) * W, y: MID - (cp/CAP) * AMP});
-  });
-  const linePath = pts.map((p,i)=> (i===0?'M':'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+  const W = 600, H = 130, MID = 65, AMP = 58;
+  const centerPly = analyzerBranch ? analyzerBranch.fromPly : analyzerPly;
+
+  // "Вікно" навколо поточного ходу замість стискання всієї партії в
+  // фіксовану ширину — інакше на довгій партії кожен хід займає долю
+  // пікселя, і графік і виглядає перевантажено, і губить деталі.
+  let winStart, winEnd;
+  if(n <= GRAPH_WINDOW){
+    winStart = 0; winEnd = n;
+  } else {
+    const half = Math.floor(GRAPH_WINDOW/2);
+    winStart = centerPly - half;
+    winEnd = winStart + GRAPH_WINDOW;
+    if(winStart < 0){ winStart = 0; winEnd = GRAPH_WINDOW; }
+    if(winEnd > n){ winEnd = n; winStart = n - GRAPH_WINDOW; }
+  }
+  const span = winEnd - winStart || 1;
+
+  // Згладжуємо по всій партії (щоб точки на межі вікна теж мали контекст
+  // сусідів ззовні), а для малювання беремо лише зріз у межах вікна.
+  const smoothedCp = smoothCpSeries(plies.map(p=>p.whiteCpAfter), 5);
+  const pts = [];
+  for(let k=winStart;k<=winEnd;k++){
+    pts.push({x: ((k - winStart) / span) * W, y: k === 0 ? MID : evalToGraphY(smoothedCp[k-1], MID, AMP)});
+  }
+  const linePath = smoothSvgPath(pts);
   const areaPath = linePath + ` L${W},${MID} L0,${MID} Z`;
-  const markers = plies.map((p,i)=>{
-    if(p.cls === 'best' || p.cls === 'good') return '';
-    const meta = MOVE_QUALITY_META[p.cls];
-    const x = ((i+1)/n) * W;
-    const cp = Math.max(-CAP, Math.min(CAP, p.whiteCpAfter));
-    const y = MID - (cp/CAP) * AMP;
-    return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${meta.color}" stroke="var(--panel-2)" stroke-width="1.5"></circle>`;
-  }).join('');
-  const curX = analyzerPly === 0 ? 0 : (analyzerPly/n) * W;
-  analyzerGraphEl.innerHTML = `<path d="${areaPath}" fill="var(--olive)" opacity="0.16" stroke="none"></path>` +
+  const markers = [];
+  for(let k=Math.max(1,winStart);k<=winEnd;k++){
+    const p = plies[k-1];
+    if(p.cls === 'best' || p.cls === 'good') continue;
+    const x = ((k - winStart) / span) * W;
+    const y = evalToGraphY(p.whiteCpAfter, MID, AMP);
+    markers.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4" fill="${MOVE_QUALITY_META[p.cls].color}" stroke="var(--panel-2)" stroke-width="1.5"></circle>`);
+  }
+  const curX = ((centerPly - winStart) / span) * W;
+  const clipId = 'graphClipTop', clipId2 = 'graphClipBot';
+  const moveNoAt = k => k === 0 ? '0' : String(Math.ceil(k/2));
+  const rangeLabels = (winStart > 0 || winEnd < n)
+    ? `<text x="6" y="14" font-size="11" fill="var(--text-muted)">${moveNoAt(winStart)}.</text>` +
+      `<text x="${W-6}" y="14" font-size="11" fill="var(--text-muted)" text-anchor="end">${moveNoAt(winEnd)}.</text>`
+    : '';
+  analyzerGraphEl.innerHTML = `<defs>
+      <clipPath id="${clipId}"><rect x="0" y="0" width="${W}" height="${MID}"></rect></clipPath>
+      <clipPath id="${clipId2}"><rect x="0" y="${MID}" width="${W}" height="${H-MID}"></rect></clipPath>
+    </defs>` +
+    `<path d="${areaPath}" fill="var(--ivory)" opacity="0.4" stroke="none" clip-path="url(#${clipId})"></path>` +
+    `<path d="${areaPath}" fill="var(--walnut-dark)" opacity="0.4" stroke="none" clip-path="url(#${clipId2})"></path>` +
     `<line x1="0" y1="${MID}" x2="${W}" y2="${MID}" stroke="var(--line)" stroke-width="1"></line>` +
-    `<path d="${linePath}" fill="none" stroke="var(--gold-soft)" stroke-width="2"></path>` +
-    markers +
-    `<line x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${H}" stroke="var(--gold)" stroke-width="1.5" opacity="0.85"></line>`;
+    `<path d="${linePath}" fill="none" stroke="var(--gold-soft)" stroke-width="2.25" stroke-linejoin="round"></path>` +
+    markers.join('') +
+    `<line x1="${curX.toFixed(1)}" y1="0" x2="${curX.toFixed(1)}" y2="${H}" stroke="var(--gold)" stroke-width="1.5" opacity="0.85"></line>` +
+    rangeLabels;
 }
 
+function moveNoFromFen(fen){ return +fen.split(' ')[5]; }
+
 function renderAnalyzerDetail(){
-  const plies = analyzerGame ? analyzerGame.plies : [];
-  if(!plies.length){ analyzerDetailEl.innerHTML = ''; return; }
-  if(analyzerPly === 0){
-    analyzerDetailEl.innerHTML = '<p class="idea">Початкова позиція. Обери хід зі стрічки вище або клікни на графік оцінки нижче.</p>';
+  if(!analyzerGame && !analyzerBranch){
+    analyzerDetailEl.innerHTML = '<p class="idea">Зіграй свій хід на дошці — рушій одразу оцінить, або встав PGN зліва, щоб розібрати цілу партію.</p>';
     return;
   }
-  const p = plies[analyzerPly - 1];
+
+  let branchNotice = '';
+  if(analyzerBranch){
+    const hasMainRecord = analyzerGame && analyzerBranch.fromPly > 0;
+    const originSan = !analyzerGame ? 'початкової позиції' : (hasMainRecord ? analyzerGame.plies[analyzerBranch.fromPly-1].san + ' (' + analyzerBranch.fromPly + '. хід)' : 'початкової позиції');
+    branchNotice = `<div class="branch-notice">🔀 Твій варіант від ${originSan} <button type="button" class="btn" id="analyzerExitBranchBtn">✕ ${analyzerGame ? 'Повернутись до партії' : 'Скинути'}</button></div>`;
+  }
+
+  const p = analyzerCurrentEntry();
+  if(!p){
+    analyzerDetailEl.innerHTML = branchNotice + '<p class="idea">Початкова позиція. Обери хід зі стрічки вище, клікни на графік оцінки нижче — або просто зіграй свій хід на дошці.</p>';
+    wireBranchExitBtn();
+    return;
+  }
+  if(p.pending){
+    analyzerDetailEl.innerHTML = branchNotice + `<div class="played-line"><strong>${moveNoFromFen(p.fenBefore)}${p.color==='w'?'.':'...'} ${p.san}</strong> — рушій оцінює хід…</div>`;
+    wireBranchExitBtn();
+    return;
+  }
   const meta = MOVE_QUALITY_META[p.cls];
   const evalNote = p.mateAfter != null ? (p.mateAfter === 0 ? 'мат' : 'мат у ' + Math.abs(p.mateAfter)) : formatWhiteCp(p.whiteCpAfter);
-  let html = `<div class="played-line"><span class="chip-icon" style="background:${meta.color}">${meta.icon}</span><strong>${p.moveNo}${p.color==='w'?'.':'...'} ${p.san}</strong> — ${meta.label} (оцінка після ходу: ${evalNote})</div>`;
+  const moveNo = p.moveNo != null ? p.moveNo : moveNoFromFen(p.fenBefore);
+  let html = branchNotice + `<div class="played-line"><span class="chip-icon" style="background:${meta.color}">${meta.icon}</span><strong>${moveNo}${p.color==='w'?'.':'...'} ${p.san}</strong> — ${meta.label} (оцінка після ходу: ${evalNote})</div>`;
   if(p.lossCp > 0 && p.bestSanPv){
     html += `<div class="engine-line"><span class="engine-line-eval">${p.altLines[0] ? formatLineEval(p.altLines[0], p.fenBefore) : ''}</span><span class="engine-line-pv">${p.bestSanPv}</span></div>`;
     html += `<button type="button" class="btn" id="analyzerShowBestBtn" style="margin:6px 0 10px;">➤ Показати кращий хід на дошці</button>`;
@@ -3599,6 +3820,7 @@ function renderAnalyzerDetail(){
     }).join('');
   }
   analyzerDetailEl.innerHTML = html;
+  wireBranchExitBtn();
   const showBestBtn = document.getElementById('analyzerShowBestBtn');
   if(showBestBtn){
     showBestBtn.addEventListener('click', ()=>{
@@ -3606,6 +3828,11 @@ function renderAnalyzerDetail(){
       hintArrow2El.style.display = 'none';
     });
   }
+}
+
+function wireBranchExitBtn(){
+  const btn = document.getElementById('analyzerExitBranchBtn');
+  if(btn) btn.addEventListener('click', analyzerExitBranch);
 }
 
 function renderAnalyzerSummary(){
@@ -3619,9 +3846,8 @@ function renderAnalyzerSummary(){
 }
 
 function updateAnalyzerBoardBadge(){
-  if(!analyzerGame || analyzerPly === 0){ boardBadgeEl.style.display = 'none'; return; }
-  const p = analyzerGame.plies[analyzerPly - 1];
-  if(p.cls === 'best' || p.cls === 'good' || !p.to){ boardBadgeEl.style.display = 'none'; return; }
+  const p = analyzerCurrentEntry();
+  if(!p || p.pending || p.cls === 'best' || p.cls === 'good' || !p.to){ boardBadgeEl.style.display = 'none'; return; }
   const meta = MOVE_QUALITY_META[p.cls];
   const pos = squareCenterPercent(p.to);
   boardBadgeEl.style.left = pos.xPct + '%';
@@ -3633,16 +3859,57 @@ function updateAnalyzerBoardBadge(){
 
 function analyzerGoTo(ply){
   if(!analyzerGame) return;
+  analyzerBranch = null;
+  analyzerBranchIdx = 0;
   analyzerPly = Math.max(0, Math.min(analyzerGame.plies.length, ply));
   hintArrow1El.style.display = 'none';
   hintArrow2El.style.display = 'none';
   renderAnalyzerView();
 }
 
+function analyzerStepPrev(){
+  if(analyzerBranch){
+    if(analyzerBranchIdx > 0){
+      analyzerBranchIdx--;
+      hintArrow1El.style.display = 'none'; hintArrow2El.style.display = 'none';
+      renderAnalyzerView();
+    } else {
+      analyzerExitBranch();
+    }
+    return;
+  }
+  analyzerGoTo(analyzerPly - 1);
+}
+function analyzerStepNext(){
+  if(analyzerBranch){
+    if(analyzerBranchIdx < analyzerBranch.moves.length){
+      analyzerBranchIdx++;
+      hintArrow1El.style.display = 'none'; hintArrow2El.style.display = 'none';
+      renderAnalyzerView();
+    }
+    return; // на кінчику власної гілки — далі можна лише зіграти новий хід
+  }
+  analyzerGoTo(analyzerPly + 1);
+}
+function analyzerStepFirst(){
+  analyzerBranch = null; analyzerBranchIdx = 0;
+  analyzerGoTo(0);
+}
+function analyzerStepLast(){
+  if(analyzerBranch){
+    analyzerBranchIdx = analyzerBranch.moves.length;
+    hintArrow1El.style.display = 'none'; hintArrow2El.style.display = 'none';
+    renderAnalyzerView();
+    return;
+  }
+  analyzerGoTo(analyzerGame ? analyzerGame.plies.length : 0);
+}
+
 function renderAnalyzerMoveListText(){
   // chess тут завжди побудований напряму з FEN якогось проміжного ходу
   // (не з початкової позиції через .move()), тож chess.history() порожня —
   // повний запис партії тримаємо окремо, в analyzerGame.plies.
+  if(!analyzerGame){ moveListEl.textContent = 'Ходів ще не було.'; return; }
   const plies = analyzerGame.plies;
   let out = '';
   for(let i=0;i<plies.length;i+=2){
@@ -3652,10 +3919,10 @@ function renderAnalyzerMoveListText(){
 }
 
 function renderAnalyzerView(){
-  if(!analyzerGame) return;
-  const fen = analyzerPly === 0 ? analyzerGame.startFen : analyzerGame.plies[analyzerPly-1].fenAfter;
-  chess = new Chess(fen);
-  lastMove = analyzerPly === 0 ? null : {from: analyzerGame.plies[analyzerPly-1].from, to: analyzerGame.plies[analyzerPly-1].to};
+  const fen = analyzerCurrentFen() || 'start';
+  chess = new Chess(fen === 'start' ? undefined : fen);
+  const entry = analyzerCurrentEntry();
+  lastMove = entry ? {from: entry.from, to: entry.to} : null;
   selected = null; legalTargets = [];
   renderBoard();
   renderAnalyzerMoveListText();
@@ -3664,11 +3931,14 @@ function renderAnalyzerView(){
   renderAnalyzerDetail();
   renderAnalyzerSummary();
   updateAnalyzerBoardBadge();
-  if(analyzerPly === 0){
-    setStatus('Початкова позиція партії. Дошка лише для перегляду.', '');
+  if(!entry){
+    setStatus('Початкова позиція' + (analyzerGame ? ' партії' : '') + '. Можеш грати свої ходи — рушій одразу оцінить.', '');
+  } else if(entry.pending){
+    setStatus((entry.color==='w'?'':'') + entry.san + ' — рушій оцінює хід…', 'engine-thinking');
+  } else if(analyzerBranch){
+    setStatus('Твій варіант, хід ' + analyzerBranchIdx + ': ' + entry.san + ' — ' + MOVE_QUALITY_META[entry.cls].label + '.', '');
   } else {
-    const p = analyzerGame.plies[analyzerPly-1];
-    setStatus('Хід ' + analyzerPly + ' / ' + analyzerGame.plies.length + ': ' + p.moveNo + (p.color==='w'?'.':'...') + ' ' + p.san + ' — ' + MOVE_QUALITY_META[p.cls].label + '.', '');
+    setStatus('Хід ' + analyzerPly + ' / ' + analyzerGame.plies.length + ': ' + entry.moveNo + (entry.color==='w'?'.':'...') + ' ' + entry.san + ' — ' + MOVE_QUALITY_META[entry.cls].label + '.', '');
   }
 }
 
@@ -3678,31 +3948,21 @@ function selectAnalyzer(){
   resetInfoPanels();
   mainBtnRowEl.style.display = 'none';
   analyzerBoxEl.style.display = 'block';
-  analyzerNavRowEl.style.display = analyzerGame ? 'flex' : 'none';
-  selected = null; legalTargets = []; lastMove = null;
+  analyzerNavRowEl.style.display = 'flex';
+  analyzerBranch = null; analyzerBranchIdx = 0;
+  selected = null; legalTargets = [];
   renderAnalyzerHeader();
   renderAnalyzerControls();
-  if(analyzerGame){
-    renderAnalyzerView();
-    setStatus('Аналізатор: дошка лише для перегляду партії.', '');
-  } else {
-    chess = new Chess();
-    flipped = false;
-    renderBoard();
-    moveListEl.textContent = 'Встав PGN зліва й натисни «Аналізувати партію».';
-    analyzerMoveStripEl.innerHTML = '';
-    analyzerGraphEl.innerHTML = '';
-    analyzerDetailEl.innerHTML = '';
-    analyzerSummaryEl.innerHTML = '';
-    boardBadgeEl.style.display = 'none';
-    setStatus('Вкладка аналізатора: встав PGN зліва, щоб почати.', '');
-  }
+  if(!analyzerGame) flipped = false;
+  renderAnalyzerView();
 }
 
-document.getElementById('analyzerFirstBtn').addEventListener('click', ()=> analyzerGoTo(0));
-document.getElementById('analyzerPrevBtn').addEventListener('click', ()=> analyzerGoTo(analyzerPly - 1));
-document.getElementById('analyzerNextBtn').addEventListener('click', ()=> analyzerGoTo(analyzerPly + 1));
-document.getElementById('analyzerLastBtn').addEventListener('click', ()=> analyzerGoTo(analyzerGame ? analyzerGame.plies.length : 0));
+document.getElementById('analyzerFirstBtn').addEventListener('click', analyzerStepFirst);
+document.getElementById('analyzerPrevBtn').addEventListener('click', analyzerStepPrev);
+document.getElementById('analyzerNextBtn').addEventListener('click', analyzerStepNext);
+document.getElementById('analyzerLastBtn').addEventListener('click', analyzerStepLast);
+document.getElementById('analyzerStripPrevBtn').addEventListener('click', analyzerStepPrev);
+document.getElementById('analyzerStripNextBtn').addEventListener('click', analyzerStepNext);
 document.getElementById('analyzerFlipBtn').addEventListener('click', ()=>{
   flipped = !flipped;
   renderBoard();
