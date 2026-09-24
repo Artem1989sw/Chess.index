@@ -596,6 +596,7 @@
     flex:1 1 auto;
     min-width:0;
   }
+  #principleMoveStrip.move-strip{margin:8px 0;padding:4px 2px 10px;border-bottom:1px solid var(--line);}
   .move-chip{
     flex:0 0 auto;
     display:flex;
@@ -624,6 +625,13 @@
     color:#241811;
     flex:0 0 auto;
   }
+  .quality-pill{
+    display:inline-flex;align-items:center;gap:4px;
+    padding:2px 9px;border-radius:999px;
+    font-size:0.76rem;font-weight:700;color:#241811;
+    white-space:nowrap;
+  }
+  .text-muted{color:var(--text-muted);font-size:0.82rem;}
 
   .eval-graph{
     width:100%;
@@ -725,6 +733,7 @@
           <div class="status-msg" id="statusMsg">Обери пункт зі списку зліва.</div>
           <div class="move-list" id="moveList"></div>
           <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
+          <div id="principleMoveStrip" class="move-strip" style="display:none;"></div>
           <div id="freePlayBox" style="display:none;">
             <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
           </div>
@@ -1416,6 +1425,7 @@ const moveListEl = document.getElementById('moveList');
 const hintBox = document.getElementById('hintBox');
 const explainBox = document.getElementById('explainBox');
 const moveCommentBox = document.getElementById('moveCommentBox');
+const principleMoveStripEl = document.getElementById('principleMoveStrip');
 const freePlayBox = document.getElementById('freePlayBox');
 const playVsEngineBtn = document.getElementById('playVsEngineBtn');
 const analysisBtnBox = document.getElementById('analysisBtnBox');
@@ -1446,6 +1456,7 @@ function resetInfoPanels(){
   moveCommentBox.style.display = 'none';
   freePlayBox.style.display = 'none';
   analysisBtnBox.style.display = 'none';
+  principleMoveStripEl.style.display = 'none';
   principleGen++; // інвалідує будь-яку ще не завершену async-оцінку ходу для попереднього пункту
 }
 const statsLine = document.getElementById('statsLine');
@@ -1519,6 +1530,7 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
           // Інакше скасований хід лишився б у логу й спотворював підсумковий аналіз.
           principleMoveLog.pop();
           analysisBtnBox.style.display = principleMoveLog.length ? 'block' : 'none';
+          renderPrincipleMoveStrip();
         }
       }
     }
@@ -2138,6 +2150,23 @@ function renderEvalSparkline(){
   return `<p class="idea eval-strip"><strong>Стрічка оцінки:</strong> <span class="eval-strip-line" title="Кожен символ — оцінка позиції на момент твого чергового ходу: нижче — гірше для тебе, вище — краще">${chars}</span></p>`;
 }
 
+// Стрічка бейджів якості ходів під час самої гри — щоб було видно ОДРАЗУ
+// (найкращий/хороший/неточність/помилка/грубий промах), а не тільки в
+// підсумку наприкінці партії чи разовим попередженням про явну помилку.
+function renderPrincipleMoveStrip(){
+  if(!principleMoveLog.length){ principleMoveStripEl.style.display = 'none'; return; }
+  principleMoveStripEl.style.display = 'flex';
+  principleMoveStripEl.innerHTML = principleMoveLog.map(m=>{
+    if(!m.cls){
+      return `<span class="move-chip" title="Рушій ще оцінює…">${m.san}<span class="chip-icon" style="background:var(--text-muted)">⏳</span></span>`;
+    }
+    const meta = MOVE_QUALITY_META[m.cls];
+    return `<span class="move-chip" title="${meta.label}${m.bestSan ? ' — краще було ' + m.bestSan : ''}">${m.moveNo}. ${m.san}<span class="chip-icon" style="background:${meta.color}">${meta.icon}</span></span>`;
+  }).join('');
+  const last = principleMoveStripEl.lastElementChild;
+  if(last) last.scrollIntoView({block:'nearest', inline:'end'});
+}
+
 // Коротке резюме вільної частини — скільки ходів рушій вважав найкращими чи
 // прийнятними і де були найпомітніші відхилення за оцінкою. Викликається,
 // коли партія справді завершується (мат/пат/нічия).
@@ -2177,6 +2206,7 @@ function selectOpening(id){
   principleMode = false;
   principleMoveLog = [];
   principleGen++;
+  renderPrincipleMoveStrip();
   userColor = currentOpening.side === 'white' ? 'w' : 'b';
   flipped = userColor === 'b';
   selected = null; legalTargets = []; lastMove = null;
@@ -2331,6 +2361,7 @@ function finishOpening(){
   principleMode = true;
   principleMoveLog = [];
   principleGen++;
+  renderPrincipleMoveStrip();
   markCompleted(PROG_KEY_OPENINGS, currentOpening.id);
   renderItemList();
   freePlayBox.style.display = 'block';
@@ -2746,7 +2777,11 @@ function attemptMove(from, to){
         const fenAfter = chess.fen();
         const moveNo = Math.ceil(chess.history().length / 2);
         const myGen = ++principleGen;
-        judgeUserMoveAsync(myGen, fenBefore, fenAfter, candidate.san, moveNo);
+        const pendingEntry = {moveNo, color: userColor, san: candidate.san, lossCp: null, cls: null, bestSan: null, evalCp: null};
+        principleMoveLog.push(pendingEntry);
+        analysisBtnBox.style.display = 'block';
+        renderPrincipleMoveStrip();
+        judgeUserMoveAsync(myGen, fenBefore, fenAfter, candidate.san, moveNo, pendingEntry);
         renderBoard();
         renderMoveList();
         if(chess.game_over()){
@@ -3060,33 +3095,42 @@ function runNextJudgeJob(){
 // гравець реально досяг), і записує різницю в principleMoveLog. myGen — токен, знятий
 // у attemptMove одразу після ходу; якщо до завершення аналізу гравець скасував хід чи
 // почав заново, principleGen встигне змінитись і результат просто відкидається.
-function judgeUserMoveAsync(myGen, fenBefore, fenAfter, candidateSan, moveNo){
+function judgeUserMoveAsync(myGen, fenBefore, fenAfter, candidateSan, moveNo, pendingEntry){
   queueJudgeJob((done)=>{
     if(myGen !== principleGen){ done(); return; }
     initJudgeEngineIfNeeded(()=>{
       if(myGen !== principleGen){ done(); return; }
       analyzePosition(judgeEngine, fenBefore, HELPER_ANALYSIS_DEPTH, (before)=>{
         if(myGen !== principleGen){ done(); return; }
-        analyzePosition(judgeEngine, fenAfter, HELPER_ANALYSIS_DEPTH, (after)=>{
-          if(myGen === principleGen){
-            const beforeWhiteCp = cpFromFen(fenBefore, before.lines[0]);
-            const afterWhiteCp = cpFromFen(fenAfter, after.lines[0]);
-            const sign = userColor === 'w' ? 1 : -1;
+        const beforeWhiteCp = cpFromFen(fenBefore, before.lines[0]);
+        const bestSanRaw = uciToSan(fenBefore, before.bestUci);
+        const sign = userColor === 'w' ? 1 : -1;
+        const finalize = (afterWhiteCp)=>{
+          if(myGen === principleGen && principleMoveLog.includes(pendingEntry)){
             const lossCp = Math.max(0, Math.round(sign * (beforeWhiteCp - afterWhiteCp)));
-            const bestSanRaw = uciToSan(fenBefore, before.bestUci);
-            principleMoveLog.push({
-              moveNo,
-              san: candidateSan,
-              lossCp,
-              bestSan: (lossCp > 0 && bestSanRaw && bestSanRaw !== candidateSan) ? bestSanRaw : null,
-              evalCp: afterWhiteCp
-            });
-            analysisBtnBox.style.display = 'block';
-            if(currentTab === 'openings' && principleMode && classifyMoveLoss(lossCp) === 'mistake'){
-              setStatus('Рушій: хід ' + candidateSan + ' — помилка' + (bestSanRaw ? ' (краще було ' + bestSanRaw + ')' : '') + '.', 'warn');
+            const cls = classifyMoveLoss(lossCp);
+            pendingEntry.lossCp = lossCp;
+            pendingEntry.cls = cls;
+            pendingEntry.bestSan = (lossCp > 0 && bestSanRaw && bestSanRaw !== candidateSan) ? bestSanRaw : null;
+            pendingEntry.evalCp = afterWhiteCp;
+            renderPrincipleMoveStrip();
+            if(currentTab === 'openings' && principleMode){
+              const label = MOVE_QUALITY_META[cls].label;
+              const suffix = (cls === 'mistake' || cls === 'blunder') && bestSanRaw ? ' (краще було ' + bestSanRaw + ')' : '';
+              setStatus('Рушій: хід ' + candidateSan + ' — ' + label + suffix + '.', (cls === 'mistake' || cls === 'blunder') ? 'warn' : 'ok');
             }
           }
           done();
+        };
+        // Мат — рушію нема що аналізувати в позиції без ходів (той самий
+        // випадок, що й у аналізаторі партії).
+        if(new Chess(fenAfter).in_checkmate()){
+          finalize(userColor === 'w' ? 100000 : -100000);
+          return;
+        }
+        analyzePosition(judgeEngine, fenAfter, HELPER_ANALYSIS_DEPTH, (after)=>{
+          if(myGen !== principleGen){ done(); return; }
+          finalize(cpFromFen(fenAfter, after.lines[0]));
         });
       });
     });
@@ -3440,7 +3484,7 @@ function analyzerJudgeBranchMove(entry){
         const beforeWhiteCp = cpFromFen(entry.fenBefore, before.lines[0]);
         const bestSanPv = before.lines[0] ? pvToSanText(before.lines[0].pvUci, entry.fenBefore, 6) : '';
         const altLines = before.lines.slice();
-        const finalize = (whiteCpAfter, mateAfter)=>{
+        const finalize = (whiteCpAfter, mateAfter, nextBestUci, nextBestSanPv)=>{
           const sign = moverColor === 'w' ? 1 : -1;
           entry.lossCp = Math.max(0, Math.round(sign * (beforeWhiteCp - whiteCpAfter)));
           entry.cls = classifyMoveLoss(entry.lossCp);
@@ -3449,17 +3493,22 @@ function analyzerJudgeBranchMove(entry){
           entry.bestUci = before.bestUci;
           entry.bestSanPv = bestSanPv;
           entry.altLines = altLines;
+          entry.nextBestUci = nextBestUci || null;
+          entry.nextBestSanPv = nextBestSanPv || '';
           entry.pending = false;
           if(analyzerBranch && analyzerBranch.moves.includes(entry)){
-            renderAnalyzerDetail();
             renderAnalyzerMoveStrip();
+            if(analyzerCurrentEntry() === entry){
+              renderAnalyzerDetail();
+              setStatus('Твій варіант, хід ' + analyzerBranchIdx + ': ' + entry.san + ' — ' + MOVE_QUALITY_META[entry.cls].label + '.', '');
+            }
           }
           done();
         };
         // Мат — рушію нема що аналізувати в позиції без ходів (той самий
         // випадок, що й у пакетному аналізаторі партії).
         if(new Chess(entry.fenAfter).in_checkmate()){
-          finalize(moverColor === 'w' ? 100000 : -100000, 0);
+          finalize(moverColor === 'w' ? 100000 : -100000, 0, null, '');
           return;
         }
         analyzePosition(judgeEngine, entry.fenAfter, HELPER_ANALYSIS_DEPTH, (after)=>{
@@ -3467,7 +3516,8 @@ function analyzerJudgeBranchMove(entry){
           const afterWhiteCp = cpFromFen(entry.fenAfter, afterLine);
           const afterSideToMove = entry.fenAfter.split(' ')[1];
           const mateAfter = (afterLine && afterLine.mate != null) ? (afterSideToMove==='w'?afterLine.mate:-afterLine.mate) : null;
-          finalize(afterWhiteCp, mateAfter);
+          const nextBestSanPv = afterLine ? pvToSanText(afterLine.pvUci, entry.fenAfter, 6) : '';
+          finalize(afterWhiteCp, mateAfter, after.bestUci, nextBestSanPv);
         });
       });
     });
@@ -3808,7 +3858,8 @@ function renderAnalyzerDetail(){
   const meta = MOVE_QUALITY_META[p.cls];
   const evalNote = p.mateAfter != null ? (p.mateAfter === 0 ? 'мат' : 'мат у ' + Math.abs(p.mateAfter)) : formatWhiteCp(p.whiteCpAfter);
   const moveNo = p.moveNo != null ? p.moveNo : moveNoFromFen(p.fenBefore);
-  let html = branchNotice + `<div class="played-line"><span class="chip-icon" style="background:${meta.color}">${meta.icon}</span><strong>${moveNo}${p.color==='w'?'.':'...'} ${p.san}</strong> — ${meta.label} (оцінка після ходу: ${evalNote})</div>`;
+  const pill = `<span class="quality-pill" style="background:${meta.color}">${meta.icon} ${meta.label}</span>`;
+  let html = branchNotice + `<div class="played-line"><strong>${moveNo}${p.color==='w'?'.':'...'} ${p.san}</strong> ${pill} <span class="text-muted">оцінка: ${evalNote}</span></div>`;
   if(p.lossCp > 0 && p.bestSanPv){
     html += `<div class="engine-line"><span class="engine-line-eval">${p.altLines[0] ? formatLineEval(p.altLines[0], p.fenBefore) : ''}</span><span class="engine-line-pv">${p.bestSanPv}</span></div>`;
     html += `<button type="button" class="btn" id="analyzerShowBestBtn" style="margin:6px 0 10px;">➤ Показати кращий хід на дошці</button>`;
@@ -3819,6 +3870,11 @@ function renderAnalyzerDetail(){
       return `<div class="engine-line"><span class="engine-line-eval">${formatLineEval(l, p.fenBefore)}</span><span class="engine-line-pv">${pvToSanText(l.pvUci, p.fenBefore, 6)}</span></div>`;
     }).join('');
   }
+  // У власному варіанті стрілка наступного ходу з'являється сама — без
+  // потреби тицяти кнопку щоразу, поки досліджуєш позицію далі.
+  if(analyzerBranch && p.nextBestUci){
+    html += `<div class="engine-line"><span class="engine-line-eval">➤</span><span class="engine-line-pv">Далі раджу: ${p.nextBestSanPv}</span></div>`;
+  }
   analyzerDetailEl.innerHTML = html;
   wireBranchExitBtn();
   const showBestBtn = document.getElementById('analyzerShowBestBtn');
@@ -3827,6 +3883,10 @@ function renderAnalyzerDetail(){
       setArrow(hintArrow1El, p.bestUci, HINT_ARROW_HEAD_LEN.primary);
       hintArrow2El.style.display = 'none';
     });
+  }
+  if(analyzerBranch && p.nextBestUci){
+    setArrow(hintArrow1El, p.nextBestUci, HINT_ARROW_HEAD_LEN.primary);
+    hintArrow2El.style.display = 'none';
   }
 }
 
