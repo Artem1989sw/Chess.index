@@ -93,7 +93,11 @@
     gap:6px;
     margin:22px 0 18px;
     border-bottom:1px solid var(--line);
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
   }
+  .tabs::-webkit-scrollbar{display:none;}
   .tab-btn{
     appearance:none;
     background:transparent;
@@ -107,6 +111,8 @@
     cursor:pointer;
     border-bottom:2px solid transparent;
     transition:color .15s ease, border-color .15s ease;
+    flex:0 0 auto;
+    white-space:nowrap;
   }
   .tab-btn:hover{color:var(--text);}
   .tab-btn.active{color:var(--gold-soft);border-bottom-color:var(--gold);}
