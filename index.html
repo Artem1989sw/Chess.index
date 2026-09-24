@@ -1363,6 +1363,8 @@ let streak = 0;
 let freePlay = false;
 let principleMode = false; // після обов'язкової частини дебюту — вільна гра за принципами
 let principleMoveLog = []; // {moveNo, san, lossCp, bestSan} для кожного ходу гравця у вільній частині
+let botMoveLog = []; // те саме, але для партії проти Stockfish (вкладка "Проти бота")
+let botPendingEval = null; // {moveNo, san, scoreForMoverWhite} — чекає оцінки позиції ПІСЛЯ ходу гравця, щоб порахувати втрату
 let tacticsFilter = 'all'; // фільтр складності на вкладці "Тактика": all | easy | medium | hard
 
 // ---- Гра проти бота (Stockfish) ----
@@ -1490,6 +1492,20 @@ function markCompleted(key, id){
 function countDue(key, items){
   const prog = loadProgress(key);
   return items.filter(it => isDue(prog[it.id])).length;
+}
+// Варіанти зберігають прогрес під складеним ключем "openingId::name" в окремій
+// сховці (щоб не роздувати "Дебюти вивчено: X/17") — тому їх due-рахунок
+// рахується окремо, а не через countDue.
+function countDueVariations(){
+  const prog = loadProgress(PROG_KEY_OPENING_VARIATIONS);
+  let count = 0;
+  OPENINGS.forEach(op=>{
+    if(!op.theory || !op.theory.variations) return;
+    op.theory.variations.forEach(v=>{
+      if(isDue(prog[op.id + '::' + v.name])) count++;
+    });
+  });
+  return count;
 }
 
 /* ===================== DOM ===================== */
@@ -1630,8 +1646,14 @@ document.getElementById('undoBtn').addEventListener('click', ()=>{
     setStatus('Хід скасовано. Спробуй ще раз.', '');
   } else if(currentTab === 'bot'){
     engineThinking = false;
+    botPendingEval = null; // позиція, на яку він чекав, щойно змінилась
     if(chess.turn() !== userColor){
       chess.undo();
+    }
+    if(botMoveLog.length){
+      // Інакше скасований хід лишився б у логу й спотворював підсумковий аналіз.
+      botMoveLog.pop();
+      analysisBtnBox.style.display = botMoveLog.length ? 'block' : 'none';
     }
     setStatus('Хід скасовано. Твій хід.', '');
   } else {
@@ -1959,7 +1981,7 @@ function updateStatsLine(){
   const tacDone = Object.values(tacProg).filter(isDone).length;
   const egDone = Object.values(egProg).filter(isDone).length;
   const cctDone = Object.values(cctProg).filter(isDone).length;
-  const dueTotal = countDue(PROG_KEY_OPENINGS, OPENINGS) + countDue(PROG_KEY_TACTICS, PUZZLES) + countDue(PROG_KEY_ENDGAMES, ENDGAMES) + countDue(PROG_KEY_CCT, CCT_PUZZLES);
+  const dueTotal = countDue(PROG_KEY_OPENINGS, OPENINGS) + countDue(PROG_KEY_TACTICS, PUZZLES) + countDue(PROG_KEY_ENDGAMES, ENDGAMES) + countDue(PROG_KEY_CCT, CCT_PUZZLES) + countDueVariations();
   const streakHtml = streak > 0 ? ` · Серія: <strong class="streak">${streak} 🔥</strong>` : '';
   const dueHtml = dueTotal > 0 ? ` · На повторення: <strong class="streak">${dueTotal} ↻</strong>` : '';
   statsLine.innerHTML = `Дебюти вивчено: <strong>${opDone}/${OPENINGS.length}</strong> · Задачі розв'язано: <strong>${tacDone}/${PUZZLES.length}</strong> · CCT: <strong>${cctDone}/${CCT_PUZZLES.length}</strong> · Ендшпілі: <strong>${egDone}/${ENDGAMES.length}</strong>${dueHtml}${streakHtml}`;
@@ -2138,13 +2160,16 @@ function announceGameOver(){
   if(currentTab === 'openings' && principleMode && principleMoveLog.length){
     explainBox.style.display = 'block';
     explainBox.innerHTML = renderPrincipleAnalysisHtml();
+  } else if(currentTab === 'bot' && botMoveLog.length){
+    explainBox.style.display = 'block';
+    explainBox.innerHTML = renderBotAnalysisHtml();
   }
 }
 
 playVsEngineBtn.addEventListener('click', enterFreePlay);
 analysisBtn.addEventListener('click', ()=>{
   explainBox.style.display = 'block';
-  explainBox.innerHTML = renderPrincipleAnalysisHtml();
+  explainBox.innerHTML = currentTab === 'bot' ? renderBotAnalysisHtml() : renderPrincipleAnalysisHtml();
 });
 
 /* ===================== ПРИНЦИПИ ДЕБЮТУ (вільна частина після обов'язкової лінії) =====================
@@ -2337,12 +2362,12 @@ function classifyMoveLoss(lossCp){
 // кожен символ показує, наскільки вигідною була позиція (з точки зору
 // гравця) у момент його чергового ходу. Дає змогу візуально побачити, де
 // партія почала "сповзати", навіть без списку найгірших ходів.
-function renderEvalSparkline(){
-  if(principleMoveLog.length < 2) return ''; // одна точка — ще не графік
+function renderEvalSparkline(log){
+  if(log.length < 2) return ''; // одна точка — ще не графік
   const BLOCKS = '▁▂▃▄▅▆▇█';
   const CAP = 400; // за межами ±4 пішаків далі висота стовпчика вже не росте
   const perspective = userColor === 'w' ? 1 : -1;
-  const chars = principleMoveLog.map(m=>{
+  const chars = log.map(m=>{
     const val = Math.max(-CAP, Math.min(CAP, (m.evalCp || 0) * perspective));
     const idx = Math.round((val + CAP) / (2 * CAP) * (BLOCKS.length - 1));
     return BLOCKS[idx];
@@ -2350,22 +2375,23 @@ function renderEvalSparkline(){
   return `<p class="idea"><strong>Стрічка оцінки:</strong> <span class="eval-strip-line" title="Кожен символ — оцінка позиції на момент твого чергового ходу: нижче — гірше для тебе, вище — краще">${chars}</span></p>`;
 }
 
-// Коротке резюме вільної частини — скільки ходів рушій вважав найкращими чи
-// прийнятними і де були найпомітніші відхилення за оцінкою. Викликається,
-// коли партія справді завершується (мат/пат/нічия).
-function renderPrincipleAnalysisHtml(){
-  if(!principleMoveLog.length) return '';
+// Спільне коротке резюме зіграних ходів — скільки рушій вважав найкращими чи
+// прийнятними і де були найпомітніші відхилення за оцінкою. Використовується
+// і для вільної частини дебюту (principleMoveLog), і для партії проти бота
+// (botMoveLog) — різниться лише сам лог і заголовок.
+function renderMoveAnalysisHtml(log, title){
+  if(!log.length) return '';
   const counts = {best:0, good:0, inaccuracy:0, mistake:0};
-  principleMoveLog.forEach(m => { counts[classifyMoveLoss(m.lossCp)]++; });
-  const worst = principleMoveLog
+  log.forEach(m => { counts[classifyMoveLoss(m.lossCp)]++; });
+  const worst = log
     .filter(m => m.lossCp > 0)
     .slice()
     .sort((a,b) => b.lossCp - a.lossCp)
     .slice(0, 3);
   let html = `<div class="theory" style="margin-top:14px;">
-    <h3>Аналіз вільної частини (${principleMoveLog.length} ${principleMoveLog.length === 1 ? 'хід' : 'ходів'})</h3>
+    <h3>${title} (${log.length} ${log.length === 1 ? 'хід' : 'ходів'})</h3>
     <p class="idea">Найкращих ходів рушія: ${counts.best} · хороших: ${counts.good} · неточностей: ${counts.inaccuracy} · помилок: ${counts.mistake}.</p>
-    ${renderEvalSparkline()}`;
+    ${renderEvalSparkline(log)}`;
   if(worst.length){
     html += `<div class="plans-col"><h4>Найпомітніші відхилення від рушія</h4><ul>${worst.map(m =>
       `<li>${m.moveNo}. ${m.san} — втрата ≈ ${(m.lossCp/100).toFixed(2)} пішака${m.bestSan ? ` (краще було ${m.bestSan})` : ''}</li>`
@@ -2375,6 +2401,12 @@ function renderPrincipleAnalysisHtml(){
   }
   html += `</div>`;
   return html;
+}
+function renderPrincipleAnalysisHtml(){
+  return renderMoveAnalysisHtml(principleMoveLog, 'Аналіз вільної частини');
+}
+function renderBotAnalysisHtml(){
+  return renderMoveAnalysisHtml(botMoveLog, 'Аналіз партії проти Stockfish');
 }
 
 /* ===================== ДЕБЮТИ ===================== */
@@ -3094,10 +3126,25 @@ function attemptMove(from, to){
       wrongAttempt('Не зовсім. Ще раз пройди CCT-чекліст і спробуй ще.');
     }
   } else if(currentTab === 'bot'){
+    // Оцінку позиції ПЕРЕД ходом беремо з того, що helperEngine уже встиг
+    // порахувати, поки гравець думав (без додаткового запиту) — а втрату
+    // порахуємо пізніше, коли maybeLogBotMove побачить оцінку позиції ПІСЛЯ.
+    const moverColor = chess.turn();
+    const preLine = helperEngine && helperEngine.lines && helperEngine.lines[0];
+    const preScoreWhite = (preLine && preLine.depth >= MIN_HINT_DEPTH) ? engineLineCpForWhite(preLine, moverColor) : null;
     const mv = chess.move(candidate);
     lastMove = mv;
     renderBoard();
     renderMoveList();
+    if(preScoreWhite !== null){
+      botPendingEval = {
+        moveNo: Math.ceil(chess.history().length / 2),
+        san: candidate.san,
+        moverColor,
+        preScoreWhite,
+        plyAfterMove: chess.history().length
+      };
+    }
     if(chess.game_over()){
       announceGameOver();
     } else {
@@ -3281,6 +3328,7 @@ function initBotEnginesIfNeeded(){
     updateEvalBar();
     if(botHintsOn) renderEngineLines();
     renderHintArrows();
+    maybeLogBotMove();
   };
 }
 
@@ -3317,6 +3365,44 @@ function renderHintArrows(){
   const l2 = lines[1] && lines[1].depth >= MIN_HINT_DEPTH ? lines[1] : null;
   setArrow(hintArrow1El, l1 && l1.pvUci && l1.pvUci[0]);
   setArrow(hintArrow2El, l2 && l2.pvUci && l2.pvUci[0]);
+}
+
+// Переводить "сирі" cp/mate від рушія (завжди з точки зору того, чия зараз
+// черга ходу в проаналізованій позиції) у значення з точки зору білих —
+// та сама конвенція, що й evalCp у principleMoveLog.
+function engineLineCpForWhite(line, turnAtThatPosition){
+  if(!line) return null;
+  if(line.mate !== null){
+    const mateWhite = turnAtThatPosition === 'w' ? line.mate : -line.mate;
+    return mateWhite > 0 ? 100000 : -100000;
+  }
+  return turnAtThatPosition === 'w' ? line.cp : -line.cp;
+}
+
+// Якщо є хід гравця проти бота, що чекає оцінки позиції ПІСЛЯ нього
+// (botPendingEval, виставлений в attemptMove) — і helperEngine саме досяг
+// достатньої глибини для цієї позиції — рахує втрату й додає в botMoveLog.
+// Викликається з helperEngine.onEval при КОЖНОМУ оновленні глибини, тому
+// може спрацювати не одразу.
+function maybeLogBotMove(){
+  if(!botPendingEval || currentTab !== 'bot') return;
+  if(chess.history().length !== botPendingEval.plyAfterMove){
+    // Суперник встиг відповісти раніше, ніж рушій дорахував саме той момент,
+    // що нас цікавив, — цей "info" вже про іншу позицію, пропускаємо хід.
+    botPendingEval = null;
+    return;
+  }
+  const line = helperEngine.lines[0];
+  if(!line || line.depth < MIN_HINT_DEPTH) return;
+  const pending = botPendingEval;
+  botPendingEval = null;
+  const opponentColor = pending.moverColor === 'w' ? 'b' : 'w';
+  const postScoreWhite = engineLineCpForWhite(line, opponentColor);
+  const preForMover = pending.moverColor === 'w' ? pending.preScoreWhite : -pending.preScoreWhite;
+  const postForMover = pending.moverColor === 'w' ? postScoreWhite : -postScoreWhite;
+  const lossCp = Math.max(0, Math.min(2000, preForMover - postForMover));
+  botMoveLog.push({moveNo: pending.moveNo, san: pending.san, lossCp, evalCp: pending.preScoreWhite});
+  analysisBtnBox.style.display = 'block';
 }
 
 function syncBotPosition(){
@@ -3471,6 +3557,8 @@ function selectBot(colorChoice){
   flipped = userColor === 'b';
   selected = null; legalTargets = []; lastMove = null;
   engineThinking = false;
+  botMoveLog = [];
+  botPendingEval = null;
   resetInfoPanels();
   evalColEl.style.display = 'flex';
   botBoxEl.style.display = 'block';
