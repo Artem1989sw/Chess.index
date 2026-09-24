@@ -14,15 +14,20 @@
     --panel:#2C251E;
     --panel-2:#342C23;
     --line:#4A3F32;
-    --ivory:#E8DCC4;
-    --walnut:#7C5A3A;
-    --walnut-dark:#5E4128;
     --gold:#C08A3E;
     --gold-soft:#E0B36A;
     --olive:#7C9A66;
     --clay:#B0553D;
     --text:#EDE6D8;
     --text-muted:#A79885;
+    /* Дошка — свій, окремий колірний світ (індиго/лаванда + зелений), як
+       у більшості шахових сайтів; навмисно не перевизначається в
+       .light-theme нижче, щоб вигляд дошки не залежав від теми сторінки. */
+    --board-light:#E3E5F5;
+    --board-dark:#38406B;
+    --board-border:#242A4A;
+    --board-accent:#4CAF50;
+    --board-accent-soft:#8BD196;
     --font-display:'Fraunces', serif;
     --font-body:'Inter', sans-serif;
     --font-mono:'IBM Plex Mono', monospace;
@@ -63,9 +68,6 @@
     --panel:#FFFFFF;
     --panel-2:#F0E9D8;
     --line:#D9CBAE;
-    --ivory:#F0E4C8;
-    --walnut:#8B6B43;
-    --walnut-dark:#6B4E2E;
     --gold:#B8863E;
     --gold-soft:#8A6428;
     --olive:#5C7A46;
@@ -266,9 +268,10 @@
   }
   .hint-arrow{
     stroke-linecap:round;
-    opacity:0.85;
+    opacity:0.9;
+    filter:drop-shadow(0 2px 4px rgba(12,14,32,.5));
   }
-  .hint-arrow.arrow-green{stroke:var(--olive);stroke-width:4;}
+  .hint-arrow.arrow-green{stroke:var(--board-accent);stroke-width:6;}
   .hint-arrow.arrow-red{stroke:var(--clay);stroke-width:7;}
 
   .board{
@@ -277,10 +280,10 @@
     grid-template-rows:repeat(8,1fr);
     width:min(420px,88vw);
     height:min(420px,88vw);
-    border:3px solid var(--walnut-dark);
+    border:3px solid var(--board-border);
     border-radius:4px;
     overflow:hidden;
-    box-shadow:0 10px 30px rgba(0,0,0,.35);
+    box-shadow:0 14px 34px rgba(12,14,32,.45);
   }
   .sq{
     position:relative;
@@ -290,8 +293,8 @@
     cursor:pointer;
     user-select:none;
   }
-  .sq.light{background:var(--ivory);}
-  .sq.dark{background:var(--walnut);}
+  .sq.light{background:var(--board-light);}
+  .sq.dark{background:var(--board-dark);}
   .sq.selected::after{
     content:"";
     position:absolute;inset:0;
@@ -300,22 +303,26 @@
   .sq.legal::after{
     content:"";
     position:absolute;
-    width:26%;height:26%;
+    width:30%;height:30%;
     border-radius:50%;
-    background:rgba(44,37,30,.35);
+    background:var(--board-accent);
+    opacity:.75;
+    box-shadow:0 2px 6px rgba(12,14,32,.35);
   }
   .sq.legal.has-piece::after{
     width:100%;height:100%;
     border-radius:0;
     background:transparent;
-    border:4px solid rgba(44,37,30,.4);
+    opacity:1;
+    box-shadow:none;
+    border:4px solid var(--board-accent);
     box-sizing:border-box;
   }
   .sq.last-from, .sq.last-to{box-shadow:inset 0 0 0 3px rgba(192,138,62,.55);}
   .sq.drag-hover::after{
     content:"";
     position:absolute;inset:0;
-    background:rgba(184,134,62,.28);
+    background:rgba(255,255,255,.18);
   }
   .sq-coord{
     position:absolute;
@@ -329,8 +336,8 @@
   }
   .sq-coord.rank{top:2px;left:3px;}
   .sq-coord.file{bottom:2px;right:3px;}
-  .sq.light .sq-coord{color:var(--walnut);}
-  .sq.dark .sq-coord{color:var(--ivory);}
+  .sq.light .sq-coord{color:var(--board-dark);}
+  .sq.dark .sq-coord{color:var(--board-light);}
   .piece{
     width:82%;
     height:82%;
@@ -367,18 +374,58 @@
   .status-msg.win{border-color:var(--gold);color:var(--gold-soft);}
   .status-msg.warn{border-color:var(--gold);color:var(--text);}
 
+  /* Горизонтальний ряд ходів-"чипів" замість суцільного тексту — гортається
+     свайпом/колесом (як .tabs), а не ламає ширину сторінки. */
   .move-list{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:8px 10px;
+    min-height:46px;
+    margin-bottom:12px;
+    overflow-x:auto;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .move-list::-webkit-scrollbar{display:none;}
+  .move-list:empty::before{
+    content:"Ходів ще не було.";
     font-family:var(--font-mono);
     font-size:0.82rem;
     color:var(--text-muted);
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:6px;
-    padding:10px 12px;
-    min-height:46px;
-    margin-bottom:12px;
-    word-break:break-word;
+    white-space:nowrap;
   }
+  .move-chip{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-family:var(--font-mono);
+    font-size:0.8rem;
+    color:var(--text);
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:5px 11px;
+    white-space:nowrap;
+    line-height:1.2;
+  }
+  .move-chip-no{color:var(--text-muted);font-weight:600;}
+  .move-chip.current{
+    background:var(--gold);
+    border-color:var(--gold);
+    color:#241811;
+    font-weight:700;
+  }
+  .move-chip.current .move-chip-no{color:#241811;opacity:.75;}
+  .move-chip-quality{width:7px;height:7px;border-radius:50%;flex:0 0 auto;}
+  .move-chip-quality.best, .move-chip-quality.good{background:var(--board-accent);}
+  .move-chip-quality.inaccuracy{background:var(--gold-soft);}
+  .move-chip-quality.mistake{background:var(--clay);}
+  .move-chip.current .move-chip-quality.best, .move-chip.current .move-chip-quality.good{background:#241811;}
 
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
   .btn{
@@ -602,8 +649,8 @@
     pointer-events:none;
   }
   .mini-sq{display:flex;align-items:center;justify-content:center;overflow:hidden;}
-  .mini-sq.light{background:var(--ivory);}
-  .mini-sq.dark{background:var(--walnut);}
+  .mini-sq.light{background:var(--board-light);}
+  .mini-sq.dark{background:var(--board-dark);}
   .mini-piece{width:82%;height:82%;}
   .opening-card-body{padding:8px 10px 10px;}
   .opening-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:6px;}
@@ -625,8 +672,8 @@
 
   /* ---- Гра проти бота (Stockfish) ---- */
   .eval-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;}
-  .eval-bar{position:relative;width:20px;height:min(420px,88vw);background:#241811;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
-  .eval-bar-fill{position:absolute;left:0;bottom:0;width:100%;background:#F7F1E3;transition:height .35s ease;}
+  .eval-bar{position:relative;width:20px;height:min(420px,88vw);background:var(--board-dark);border:1px solid var(--board-border);border-radius:4px;overflow:hidden;}
+  .eval-bar-fill{position:absolute;left:0;bottom:0;width:100%;background:var(--board-light);transition:height .35s ease;}
   .eval-bar-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);}
   .engine-status{font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;}
   .engine-status.ok{color:var(--olive);}
@@ -679,8 +726,8 @@
             <div class="board" id="board"></div>
             <svg class="hint-arrows" id="hintArrows" viewBox="0 0 420 420" preserveAspectRatio="none">
               <defs>
-                <marker id="arrowHeadGreen" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                  <polygon points="0,0 8,4 0,8" fill="var(--olive)"></polygon>
+                <marker id="arrowHeadGreen" markerWidth="9" markerHeight="9" refX="6.5" refY="4.5" orient="auto">
+                  <polygon points="0,0 9,4.5 0,9" fill="var(--board-accent)"></polygon>
                 </marker>
                 <marker id="arrowHeadRed" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto">
                   <polygon points="0,0 7,3.5 0,7" fill="var(--clay)"></polygon>
@@ -2881,15 +2928,42 @@ function pieceImgSrc(piece){
   return 'pieces/' + piece.color + piece.type.toUpperCase() + '.svg';
 }
 
+// {plyIndex(0-based): 'best'|'good'|'inaccuracy'|'mistake'} для ходів гравця
+// проти бота, з botMoveLog — щоб показати кольорову крапку на чипі ходу.
+function botMoveQualityByPly(){
+  const map = {};
+  botMoveLog.forEach(m=>{ if(m.ply !== undefined) map[m.ply] = classifyMoveLoss(m.lossCp); });
+  return map;
+}
+
 function renderMoveList(){
   const history = chess.history();
-  if(history.length === 0){ moveListEl.textContent = 'Ходів ще не було.'; return; }
-  let out = '';
-  for(let i=0;i<history.length;i+=2){
-    const num = i/2 + 1;
-    out += num + '. ' + history[i] + (history[i+1] ? ' ' + history[i+1] + '  ' : '');
-  }
-  moveListEl.textContent = out.trim();
+  moveListEl.innerHTML = ''; // порожній стан малює сам CSS через .move-list:empty::before
+  if(history.length === 0) return;
+  const qualityByPly = currentTab === 'bot' ? botMoveQualityByPly() : null;
+  history.forEach((san, i)=>{
+    const chip = document.createElement('span');
+    chip.className = 'move-chip' + (i === history.length - 1 ? ' current' : '');
+    if(i % 2 === 0){
+      const no = document.createElement('span');
+      no.className = 'move-chip-no';
+      no.textContent = (i / 2 + 1) + '.';
+      chip.appendChild(no);
+    }
+    const sanEl = document.createElement('span');
+    sanEl.textContent = san;
+    chip.appendChild(sanEl);
+    const quality = qualityByPly && qualityByPly[i];
+    if(quality){
+      const dot = document.createElement('span');
+      dot.className = 'move-chip-quality ' + quality;
+      dot.title = quality;
+      chip.appendChild(dot);
+    }
+    moveListEl.appendChild(chip);
+  });
+  const currentChip = moveListEl.lastElementChild;
+  if(currentChip) currentChip.scrollIntoView({behavior:'smooth', inline:'end', block:'nearest'});
 }
 
 function setStatus(msg, kind){
@@ -3401,7 +3475,7 @@ function maybeLogBotMove(){
   const preForMover = pending.moverColor === 'w' ? pending.preScoreWhite : -pending.preScoreWhite;
   const postForMover = pending.moverColor === 'w' ? postScoreWhite : -postScoreWhite;
   const lossCp = Math.max(0, Math.min(2000, preForMover - postForMover));
-  botMoveLog.push({moveNo: pending.moveNo, san: pending.san, lossCp, evalCp: pending.preScoreWhite});
+  botMoveLog.push({moveNo: pending.moveNo, san: pending.san, lossCp, evalCp: pending.preScoreWhite, ply: pending.plyAfterMove - 1});
   analysisBtnBox.style.display = 'block';
 }
 
