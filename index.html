@@ -541,7 +541,8 @@
     word-break:break-word;
     white-space:pre-wrap;
   }
-  .ref-game p{margin:0;color:var(--text-muted);font-size:0.87rem;}
+  .ref-game p{margin:0 0 10px;color:var(--text-muted);font-size:0.87rem;}
+  .ref-game-btn{font-size:0.82rem;padding:7px 12px;}
   .ref-note{font-size:0.82rem;color:var(--text-muted);font-style:italic;margin:0 0 12px;max-width:74ch;}
   #returnTrainBtn{margin-top:12px;}
   #freePlayBox{margin:4px 0 12px;}
@@ -1711,6 +1712,57 @@ const REFERENCE = [
   `},
 ];
 
+// Ходи дебютної стадії партій, згаданих у "Довіднику" — саме до цього моменту
+// (усталена, добре задокументована теорія) дошка може відтворити партію
+// натисканням "Переглянути партію"; далі гра йшла за сценарієм зі статті.
+const REFERENCE_GAMES = {
+  italian: [
+    {moves:["e4","e5","Nf3","Nc6","Bc4","Bc5","c3","Nf6","d3","d6","O-O","O-O","Re1","a6","a4","Ba7","h3","h6","Nbd2","Re8","Bb3"]},
+    {moves:["e4","e5","Nf3","Nc6","Bc4","Bc5","b4","Bxb4","c3","Ba5","d4","exd4","O-O"]}
+  ],
+  ruylopez: [
+    {moves:["e4","e5","Nf3","Nc6","Bb5","Nf6","O-O","Nxe4","d4","Nd6","Bxc6","dxc6","dxe5","Nf5","Qxd8+","Kxd8","Nc3","Ke8","h3","h5","Bf4","Be6","Rad1"]},
+    {moves:["e4","e5","Nf3","Nc6","Bb5","a6","Ba4","Nf6","O-O","Be7","Re1","b5","Bb3","d6","c3","O-O","h3","Bb7"]}
+  ],
+  opensicilian: [
+    {moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","a6","Bg5","e6","f4","Be7","Qf3","Qc7","O-O-O","Nbd7","g4","b5"]},
+    {moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","a6","Bc4","e6","Bb3","b5","O-O","Be7","Re1","O-O"]}
+  ],
+  sicilianDragon: [
+    {moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","g6","Be3","Bg7","f3","O-O","Qd2","Nc6","Bc4","Bd7","O-O-O","Rc8"]}
+  ],
+  sicilianScheveningen: [
+    {moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","e6","Be2","Be7","O-O","O-O","Kh1","Nc6","f4","a6","a4","Qc7"]}
+  ],
+  french: [
+    {moves:["e4","e6","d4","d5","Nc3","Bb4","e5","c5","a3","Bxc3+","bxc3","Ne7","Qg4","Qc7","Qxg7","Rg8","Qxh7","cxd4"]}
+  ],
+  carokann: [
+    {moves:["e4","c6","d4","d5","Nc3","dxe4","Nxe4","Bf5","Ng3","Bg6","h4","h6","Nf3","Nd7","h5","Bh7","Bd3","Bxd3","Qxd3","e6","Bf4","Ngf6","O-O-O"]}
+  ],
+  qgd: [
+    {moves:["d4","d5","c4","e6","Nc3","Nf6","Bg5","Be7","e3","O-O","Nf3","Nbd7","Rc1","c6","Bd3","dxc4","Bxc4","Nd5"]},
+    {moves:["c4","e6","Nf3","d5","d4","Nf6","Nc3","Be7","Bg5","O-O","e3","h6","Bh4","b6"]}
+  ],
+  slav: [
+    {moves:["d4","d5","c4","c6","Nf3","Nf6","Nc3","e6","e3","Nbd7","Bd3","dxc4","Bxc4","b5","Bd3","Bb7","O-O","a6","e4","c5","d5"]}
+  ],
+  english: [
+    {moves:["c4","e6","Nf3","d5","d4","Nf6","Nc3","Be7","Bg5","O-O","e3","h6","Bh4","b6"]},
+    {moves:["c4","e5","Nc3","Nc6","g3","g6","Bg2","Bg7","e4","Nge7","Nge2","O-O","O-O","d6","d3","Nd4","Be3"]}
+  ],
+  kid: [
+    {moves:["d4","Nf6","c4","g6","Nc3","Bg7","e4","d6","Nf3","O-O","Be2","e5","O-O","Nc6","d5","Ne7","Ne1","Nd7"]}
+  ],
+  nimzo: [
+    {moves:["d4","Nf6","c4","e6","Nc3","Bb4","e3","O-O","Bd3","c5","Nf3","Nc6","O-O","Bxc3","bxc3","d6","e4","e5"]},
+    {moves:["d4","Nf6","c4","e6","Nc3","Bb4","Qc2","O-O","a3","Bxc3+","Qxc3","Ne4"]}
+  ],
+  scotch: [
+    {moves:["e4","e5","Nf3","Nc6","d4","exd4","Nxd4","Nf6","Nxc6","bxc6","e5","Qe7","Qe2","Nd5","c4","Ba6"]}
+  ]
+};
+
 const PUZZLES = [
   {id:'p1', difficulty:'easy', theme:'Мат в 1 хід — лінійний мат',
    fen:'7k/6pp/8/8/8/8/5PPP/R5K1 w - - 0 1',
@@ -2510,12 +2562,49 @@ function selectReference(id){
   const ref = REFERENCE.find(r=>r.id===id);
   if(!ref) return;
   currentReference = ref;
+  boardAreaEl.style.display = 'none'; // дошку показує лише клік на "Переглянути партію", кожна нова стаття починається без неї
   referenceArticleEl.innerHTML = `
     <div class="ref-eco">${ref.eco}</div>
     <h2>${ref.name}</h2>
     ${ref.article}
   `;
+  const gameData = REFERENCE_GAMES[id] || [];
+  referenceArticleEl.querySelectorAll('.ref-game').forEach((box, i)=>{
+    const data = gameData[i];
+    if(!data) return;
+    const lineEl = box.querySelector('.ref-game-line');
+    if(lineEl) lineEl.textContent = sanListToPgnText(data.moves);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn ref-game-btn';
+    btn.textContent = '▶ Переглянути партію на дошці';
+    btn.addEventListener('click', ()=>{
+      const title = box.querySelector('.ref-game-title')?.textContent || ref.name;
+      const note = box.querySelector('p')?.textContent || '';
+      replayReferenceGame(data.moves, title, note);
+    });
+    box.appendChild(btn);
+  });
   updateActiveItem();
+}
+
+// Формує "1. e4 e5 2. Nf3 …" з масиву SAN-ходів — той самий формат, що показує renderMoveList.
+function sanListToPgnText(moves){
+  let out = '';
+  for(let i=0;i<moves.length;i+=2){
+    const num = i/2 + 1;
+    out += num + '. ' + moves[i] + (moves[i+1] ? ' ' + moves[i+1] + '  ' : '');
+  }
+  return out.trim();
+}
+
+// Програє партію з довідника на спільній дошці, не чіпаючи стан жодної іншої
+// вкладки — дошка з'являється просто під статтею, поки currentTab лишається 'reference'.
+function replayReferenceGame(moves, title, note){
+  boardAreaEl.style.display = 'flex';
+  flipped = false;
+  startLineReplay(null, {name: title, moves, note: note || ''}, 'game', false);
+  boardAreaEl.scrollIntoView({block:'nearest'});
 }
 
 /* ===================== ПРОСТИЙ РУШІЙ (МІНІМАКС) ===================== */
@@ -3066,7 +3155,7 @@ function startLineReplay(op, line, kind, comments){
   moveCommentBox.style.display = 'none';
   renderBoard();
   renderMoveList();
-  const introLabel = kind === 'trap' ? 'Перегляд пастки: ' : kind === 'variation' ? 'Перегляд варіанту: ' : 'Перегляд основної лінії: ';
+  const introLabel = kind === 'trap' ? 'Перегляд пастки: ' : kind === 'variation' ? 'Перегляд варіанту: ' : kind === 'game' ? 'Партія: ' : 'Перегляд основної лінії: ';
   setStatus(introLabel + line.name, '');
 
   const moves = line.moves;
@@ -3079,7 +3168,7 @@ function startLineReplay(op, line, kind, comments){
       if(comments){ showMoveComment(op, i); }
       if(i === moves.length - 1){
         isReplaying = false;
-        const finishMsg = kind === 'trap' ? 'Ось так спрацьовує пастка.' : kind === 'variation' ? 'Ось так може розвиватися ця лінія.' : 'Ось так виглядає основна лінія. Тепер спробуй пройти її сам!';
+        const finishMsg = kind === 'trap' ? 'Ось так спрацьовує пастка.' : kind === 'variation' ? 'Ось так може розвиватися ця лінія.' : kind === 'game' ? 'Дебютна стадія партії відтворена — далі гра тривала за сценарієм, описаним у статті.' : 'Ось так виглядає основна лінія. Тепер спробуй пройти її сам!';
         setStatus(finishMsg, 'win');
         if(!comments){
           explainBox.style.display = 'block';
@@ -3393,6 +3482,7 @@ function setStatus(msg, kind){
 
 function onSquarePointerDown(e, squareName){
   if(isReplaying) return;
+  if(currentTab === 'reference') return; // дошка в довіднику — лише для перегляду партії, без ручних ходів
   if(currentTab === 'analyzer' && chess.game_over()) return; // партія на дошці аналізатора скінчилась — нема чим ходити
   if(currentTab === 'tactics' && puzzleSolved) return;
   if(currentTab === 'cct' && cctSolved) return;
