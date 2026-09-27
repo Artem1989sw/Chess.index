@@ -557,6 +557,55 @@
     z-index:50;
     white-space:normal;
   }
+  .ref-diagram{
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:10px;
+    margin:0 0 18px;
+    padding:14px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+  }
+  .mini-board{
+    display:grid;
+    grid-template-columns:repeat(8,1fr);
+    grid-template-rows:repeat(8,1fr);
+    width:min(220px,60vw);
+    height:min(220px,60vw);
+    border:2px solid var(--walnut-dark);
+    border-radius:4px;
+    overflow:hidden;
+    flex:0 0 auto;
+  }
+  .mini-board .sq{cursor:default;}
+  .mini-board .piece{font-size:min(5.5vw,24px);cursor:default;}
+  .ref-diagram-caption{font-size:0.85rem;color:var(--text-muted);max-width:60ch;margin:0;}
+  .ref-quiz{margin:28px 0 0;padding-top:16px;border-top:1px solid var(--line);}
+  .ref-quiz h3{margin-top:0;padding-top:0;border-top:none;}
+  .ref-quiz-q{margin:0 0 20px;}
+  .ref-quiz-q:last-child{margin-bottom:0;}
+  .ref-quiz-question{font-size:0.95rem;color:var(--text);margin:0 0 10px;font-weight:600;}
+  .ref-quiz-options{display:flex;flex-direction:column;gap:7px;max-width:60ch;}
+  .ref-quiz-opt{
+    display:block;
+    width:100%;
+    text-align:left;
+    padding:9px 12px;
+    border-radius:8px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-family:var(--font-body);
+    font-size:0.88rem;
+    cursor:pointer;
+    transition:border-color .15s;
+  }
+  .ref-quiz-opt:hover:not(:disabled){border-color:var(--gold-soft);}
+  .ref-quiz-opt:disabled{cursor:default;}
+  .ref-quiz-opt.correct{border-color:var(--olive);background:rgba(124,154,102,0.15);color:var(--olive);}
+  .ref-quiz-opt.wrong{border-color:var(--clay);background:rgba(176,85,61,0.15);color:var(--clay);}
   .ref-line{
     display:block;
     font-family:var(--font-mono);
@@ -3063,7 +3112,7 @@ const GLOSSARY = [
 // підсвічувати те саме двічі і не чіпати h2/h3.
 function applyGlossaryTooltips(container){
   const used = new Set();
-  const skipTags = new Set(['H2','H3','A','NAV']);
+  const skipTags = new Set(['H2','H3','A','NAV','BUTTON']);
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node){
       let el = node.parentElement;
@@ -3126,6 +3175,205 @@ function buildRefQuickNav(container){
   container.insertBefore(nav, heads[0]);
 }
 
+// Міні-діаграми для "Довідника": для 13 дебютів із іменною пасткою беремо
+// фінальну позицію самої пастки (moves збігаються з OPENINGS[i].trap.moves —
+// уже перевірені ходи з тренажера); для решти 6 — типову табію з базової
+// лінії OPENINGS[i].moves. afterSection вказує, у який розділ статті
+// вставляти діаграму (в кінець цього розділу, перед наступним h3).
+const REF_DIAGRAMS = {
+  italian: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","e5","Nf3","Nc6","Bc4","d6","Nc3","Bg4","Nxe5","Bxd1","Bxf7+","Ke7","Nd5#"], caption:"Фінальна позиція пастки «Мат Легаля»: 8.Nd5# — чорний король затиснений власними фігурами, тікати нікуди."},
+  ruylopez: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","e5","Nf3","Nc6","Bb5","a6","Ba4","d6","d4","b5","Bb3","Nxd4","Nxd4","exd4","Qxd4","c5","Qd5","Be6","Qc6+","Bd7","Qd5","c4"], caption:"Пастка Ноєвого ковчега в дії: пішаки a6-b5-c4 назавжди замурували білого слона на b3."},
+  opensicilian: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","c5","d4","cxd4","c3","dxc3","Nxc3","Nc6","Nf3","e6","Bc4","Qc7","O-O","Nf6","Qe2","Ng4","h3","Nd4"], caption:"Сибірська пастка: кінь щойно стрибнув на d4, одночасно погрожуючи Nxf3+ і матом на h2."},
+  sicilianDragon: {afterSection:'Типові пішакові структури', moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","g6","Be3","Bg7","f3","O-O","Qd2","Nc6","Bc4","Bd7","O-O-O","Rc8"], caption:"Типова табія Югославської атаки: рокіровки в різні боки, обидва штурми — g-h у білих, лінія «c» у чорних — готові до старту."},
+  sicilianScheveningen: {afterSection:'Типові пішакові структури', moves:["e4","c5","Nf3","d6","d4","cxd4","Nxd4","Nf6","Nc3","e6","Be2","Be7","O-O","O-O","Kh1","Nc6","f4","a6","a4","Qc7"], caption:"Типова табія Шевенінгена: компактний трикутник d6-e6 у чорних, білі щойно завершили класичний розвиток і готують f4-f5."},
+  french: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","e6","d4","d5","e5","c5","c3","Nc6","Nf3","Qb6","Bd3","cxd4","cxd4","Nxd4","Nxd4","Qxd4"], caption:"Фінал пастки Bd3??: чорний ферзь на d4 водночас б'є слона d3 і пішака b2 — білі втрачають фігуру."},
+  carokann: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","c6","d4","d5","Nc3","dxe4","Nxe4","Nd7","Qe2","Ngf6","Nd6#"], caption:"Задушений мат: 6.Nd6# — король чорних застряг у кутку між власними фігурами."},
+  qgd: {afterSection:'Типові тактичні мотиви та жертви', moves:["d4","d5","c4","e6","Nc3","Nf6","Bg5","Nbd7","cxd5","exd5","Nxd5","Nxd5","Bxd8","Bb4+","Qd2","Bxd2+","Kxd2","Kxd8"], caption:"Фінал Elephant Trap: після Nxd5! Bxd8 Bb4+ чорні відіграли ферзя і залишаються із зайвою фігурою."},
+  slav: {afterSection:'Типові тактичні мотиви та жертви', moves:["d4","d5","c4","c6","Nf3","Nf6","Nbd2","Bf5","Nh4","Bg6","Qb3","Qb6","Qh3","a6","Nxg6","hxg6","Qc8+"], caption:"Позиція після пастки на 4.Nbd2: білий ферзь щойно виграв матеріал серією ударів по слону g6."},
+  english: {afterSection:'Типові тактичні мотиви та жертви', moves:["c4","Nf6","Nc3","e6","e4","d5","e5","d4","exf6","dxc3","fxg7","cxb2","gxh8=Q","bxa1=Q"], caption:"Обидві сторони одночасно довели пішака до останньої горизонталі — рідкісна ілюстрація того, наскільки гострим буває «спокійний» фланговий дебют."},
+  kid: {afterSection:'Типові тактичні мотиви та жертви', moves:["d4","Nf6","c4","g6","Nc3","Bg7","e4","d6","Nf3","O-O","Bg5","h6","Bh4","g5","Nxg5","hxg5","Bxg5"], caption:"Позиція після 10.Bxg5: кінь f6 зв'язаний по діагоналі до ферзя d8 — наступним ходом білі заберуть і його."},
+  nimzo: {afterSection:'Типові тактичні мотиви та жертви', moves:["d4","Nf6","c4","e6","Nc3","Bb4","Qc2","O-O","a3","Bxc3+","Qxc3","Ne4"], caption:"Чому bxc3 кращий за Qxc3: після 6...Ne4! ферзю доведеться відступати, втрачаючи темп."},
+  scandinavian: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","d5","exd5","Qxd5","Nc3","Qa5","b4","Qxb4","Nb5","Qa5","Bc4","c6","Bxf7+","Kxf7","Qh5+","g6","Nd6+","exd6","Qxa5"], caption:"Фінал пастки Леонгардта: подвійний удар 9.Nd6+ розкрив лінію ферзя h5 просто на чорного ферзя a5."},
+  budapest: {afterSection:'Типові тактичні мотиви та жертви', moves:["d4","Nf6","c4","e5","dxe5","Ng4","Bf4","Nc6","Nf3","Bb4+","Nbd2","Qe7","a3","Ngxe5","axb4","Nd3#"], caption:"Пастка Кінінгера: 10.Nd3# — задушений мат, пішак e2 зв'язаний і не може забрати коня."},
+  pirc: {afterSection:'Типові пішакові структури', moves:["e4","d6","d4","Nf6","Nc3","g6","Nf3","Bg7","Be2","O-O","O-O","c6"], caption:"Типова табія: чорні щойно зіграли c6, готуючи d5 чи b5 і завершуючи класичну систему фланкетто проти великого центру білих."},
+  alekhine: {afterSection:'Типові пішакові структури', moves:["e4","Nf6","e5","Nd5","d4","d6","Nf3","Bg4","Be2","e6","O-O","Be7","c4","Nb6","exd6","cxd6","Nc3","O-O"], caption:"Типова позиція Системи з Nf3: кінь на b6 тисне на пішак c4, а білі щойно вирішили напругу ходом exd6."},
+  london: {afterSection:'Типові пішакові структури', moves:["d4","d5","Bf4","Nf6","Nf3","c5","e3","Nc6","Nbd2","e6","c3","Bd6","Bg3","O-O","Bd3","Qc7","Ne5","Bxe5"], caption:"Типовий план: кінь централізувався на e5, підтримуючи слона і готуючи атаку на короля, що рокірувався в коротку сторону."},
+  scotch: {afterSection:'Типові пішакові структури', moves:["e4","e5","Nf3","Nc6","d4","exd4","Nxd4","Nf6","Nxc6","bxc6","e5","Qe7"], caption:"Типова позиція після 6.Nxc6 bxc6 7.e5: чорні отримали пару слонів, білі — простір і темп на відступ ферзя."},
+  kingsgambit: {afterSection:'Типові тактичні мотиви та жертви', moves:["e4","e5","f4","exf4","Nf3","g5","h4","g4","Ne5","Nf6","Bc4","d5","exd5","Qxd5"], caption:"Пастка «Ферзь на d5»: чорні щойно забрали пішака ферзем, не помітивши, що слон c4 вже дивиться на це поле."},
+};
+
+// Малює статичний, нередагований знімок позиції (без drag&drop і кліків) —
+// той самий формат board(), що й у renderBoard(), і той самий pieceGlyph(),
+// але в окремому контейнері .mini-board, щоб не чіпати живу дошку.
+function renderMiniBoard(fen){
+  const tempChess = new Chess(fen);
+  const board = tempChess.board();
+  const wrap = document.createElement('div');
+  wrap.className = 'mini-board';
+  for(let r=0;r<8;r++){
+    for(let f=0;f<8;f++){
+      const sqEl = document.createElement('div');
+      const isLight = (r + f) % 2 === 0;
+      sqEl.className = 'sq ' + (isLight ? 'light' : 'dark');
+      const piece = board[r][f];
+      if(piece){
+        const span = document.createElement('span');
+        span.className = 'piece ' + (piece.color === 'w' ? 'piece-w' : 'piece-b');
+        span.textContent = pieceGlyph(piece);
+        sqEl.appendChild(span);
+      }
+      wrap.appendChild(sqEl);
+    }
+  }
+  return wrap;
+}
+
+// Вставляє міні-діаграму в кінець розділу afterSection (перед наступним h3).
+function insertRefDiagram(container, id){
+  const spec = REF_DIAGRAMS[id];
+  if(!spec) return;
+  const heads = Array.from(container.querySelectorAll('h3'));
+  const targetHead = heads.find(h => h.textContent.trim() === spec.afterSection);
+  if(!targetHead) return;
+  let insertBeforeNode = targetHead.nextElementSibling;
+  while(insertBeforeNode && insertBeforeNode.tagName !== 'H3'){
+    insertBeforeNode = insertBeforeNode.nextElementSibling;
+  }
+  let fen;
+  try{
+    const tempChess = new Chess();
+    spec.moves.forEach(san => tempChess.move(san));
+    fen = tempChess.fen();
+  }catch(e){ console.error('Ref diagram move error for', id, e); return; }
+  const box = document.createElement('div');
+  box.className = 'ref-diagram';
+  box.appendChild(renderMiniBoard(fen));
+  const cap = document.createElement('p');
+  cap.className = 'ref-diagram-caption';
+  cap.textContent = spec.caption;
+  box.appendChild(cap);
+  targetHead.parentNode.insertBefore(box, insertBeforeNode);
+}
+
+// Короткий квіз (2 запитання) наприкінці кожної статті — перевіряє щойно
+// прочитане; стан не зберігається між візитами, це лише швидка самоперевірка.
+const REF_QUIZZES = {
+  italian: [
+    {q:"Яка головна ідея тихої системи (Джуоко Піанісимо, 4.c3 і 5.d3)?", options:["Негайно розкрити центр ходом d4","Уникнути гострих ліній і грати на довгу, безпечну перевагу без ризику","Пожертвувати пішака заради миттєвої атаки"], correct:1},
+    {q:"Чим славиться Гамбіт Еванса (4.b4)?", options:["Розміном ферзів на 5-му ході","Жертвою пішака заради темпу й потужного центру c3-d4","Негайною рокіровкою в довгу сторону"], correct:1},
+  ],
+  ruylopez: [
+    {q:"Чому Берлінський захист (3...Nf6) став головною зброєю на елітному рівні після 2000 року?", options:["Він форсує швидкий мат","Він веде до структурно неприємного для білих ендшпілю з хорошими шансами на нічию","Він уникає розвитку фігур"], correct:1},
+    {q:"У чому суть Пастки Ноєвого ковчега?", options:["Білі втрачають слона, назавжди замурованого пішаками a6-b5-c4","Чорні втрачають коня c6","Білі ставлять мат за 3 ходи"], correct:0},
+  ],
+  opensicilian: [
+    {q:"Навіщо чорні грають 5...a6 у Найдорфі?", options:["Щоб одразу атакувати центр пішаком","Щоб забрати в білих поле b5 і зберегти максимальну гнучкість","Щоб підготувати негайну рокіровку в довгу сторону"], correct:1},
+    {q:"Який головний сучасний план білих проти Найдорфа?", options:["Англійська атака (Be3, f3, Qd2, O-O-O)","Негайний розмін усіх фігур","Атака Кереса (g4)"], correct:0},
+  ],
+  sicilianDragon: [
+    {q:"Чому дебют називається «Дракон»?", options:["На честь гросмейстера з таким прізвищем","Через форму пішакового ланцюга чорних, що нагадала комусь сузір'я Дракона","Бо в ньому завжди жертвують ферзя"], correct:1},
+    {q:"Що таке жертва Rxc3 у Драконі?", options:["Жертва якості, що руйнує пішаковий захист короля білих","Помилковий хід-пастка для чорних","Спосіб форсувати нічию"], correct:0},
+  ],
+  sicilianScheveningen: [
+    {q:"Чому структуру d6-e6 називають «маленьким центром»?", options:["Бо чорні взагалі відмовляються від пішаків у центрі","Бо чорні не займають багато простору, зате мають гнучку, важку для атаки структуру","Бо це найгостріший варіант сицилійського захисту"], correct:1},
+    {q:"Яка головна небезпека для чорних ще до рокіровки?", options:["Атака Кереса (g4-g5)","Розмінний варіант","Гамбіт слона"], correct:0},
+  ],
+  french: [
+    {q:"Яка головна стратегічна проблема чорних у Французькому захисті?", options:["Слабкість пішака e6","Слон c8, замкнений власним пішаком e6","Неможливість рокіруватися"], correct:1},
+    {q:"Що отримують білі у Вінавері після Bxc3+ bxc3?", options:["Втрачають темп назавжди","Двох слонів і потужний центр ціною здвоєних пішаків","Змушені віддати ферзя"], correct:1},
+  ],
+  carokann: [
+    {q:"Чим Каро-Канн вигідно відрізняється від Французького захисту?", options:["Слон c8 виходить на f5/g4 ще до e6, не замикаючись власним пішаком","У ньому взагалі немає пішака e6","Чорні одразу виграють пішака"], correct:0},
+    {q:"Хто вважав Каро-Канн фірмовою зброєю на все життя?", options:["Бобі Фішер","Анатолій Карпов","Пол Морфі"], correct:1},
+  ],
+  qgd: [
+    {q:"Чому Ферзевий гамбіт формально не є справжнім гамбітом?", options:["Пішак c4 неможливо втримати надовго, і його зазвичай повертають","У ньому взагалі не жертвують пішака","Білі завжди програють пішака назад без компенсації"], correct:0},
+    {q:"У чому суть атаки меншості?", options:["Розмін усіх важких фігур","Просунути меншу кількість пішаків (b4-b5), щоб створити слабкість у суперника","Негайний мат по останній горизонталі"], correct:1},
+  ],
+  slav: [
+    {q:"Яка головна перевага Слов'янського захисту над Ортодоксальним Ферзевим гамбітом?", options:["Пішак c6 захищає d5, не замикаючи білопільного слона","Чорні одразу виграють пішака","Білі не можуть рокуватися"], correct:0},
+    {q:"Чим славиться Меранська система?", options:["Найспокійнішими, суто нічийними лініями","Однією з найгостріших систем усього ферзевого дебюту з жертвами пішаків","Негайним розміном ферзів"], correct:1},
+  ],
+  english: [
+    {q:"Чому Англійський дебют важко готувати наперед?", options:["У ньому заборонені всі стандартні плани","Через величезну кількість можливих транспозицій в інші дебюти","Бо партія завжди закінчується внічию"], correct:1},
+    {q:"У що може перетворитися симетричний варіант (1...c5)?", options:["У структури, типові для Сицилійського захисту, тільки із зайвим темпом у білих","У Захист Каро-Канн","У Гамбіт короля"], correct:0},
+  ],
+  kid: [
+    {q:"Яка головна ідея Староіндійського захисту?", options:["Одразу боротися за центр пішаками","Спершу контролювати центр фігурами здалеку, а потім вдарити пішаками","Уникати рокіровки якомога довше"], correct:1},
+    {q:"Чому чорні уникають розмінів у замкненому центрі КІД?", options:["Бо їм потрібні ферзі й важкі фігури для атаки на короля білих","Бо розміни заборонені правилами дебюту","Бо це завжди веде до програшу пішака"], correct:0},
+  ],
+  nimzo: [
+    {q:"Що роблять чорні ходом Bxc3+ у Захисті Німцовича?", options:["Жертвують слона назавжди без компенсації","Псують пішакову структуру білих ціною віддачі пари слонів","Форсують негайну нічию"], correct:1},
+    {q:"Чому 6.bxc3 зазвичай кращий за 6.Qxc3?", options:["Qxc3 програє фігуру одразу","Bxc3 узагалі неможливий у цій позиції","Після Qxc3 чорні виграють темп ходом Ne4, атакуючи ферзя"], correct:2},
+  ],
+  scandinavian: [
+    {q:"Чому Скандинавський захист вважають простим для розуміння?", options:["У ньому взагалі немає теорії","Чорні швидко надолужують розвиток, і позиція залишається ясною й прозорою","Партія завжди закінчується за 10 ходів"], correct:1},
+    {q:"Яке з цих полів НЕ згадується в статті як типове поле для відступу ферзя?", options:["a5","d6","c6"], correct:2},
+  ],
+  budapest: [
+    {q:"Яка головна ідея Будапештського гамбіту?", options:["Віддати пішака і повільно розвиватися далі","Віддати пішака, щоб миттєво відіграти його конем і випередити суперника в розвитку","Уникати будь-яких розмінів"], correct:1},
+    {q:"Що станеться після 7...Ngxe5 8.axb4??", options:["Білі виграють фігуру","8...Nd3# — задушений мат","Партія одразу завершується внічию"], correct:1},
+  ],
+  pirc: [
+    {q:"Чим Пірц схожий на Староіндійський захист?", options:["Обидва грають проти 1.d4","В обох чорні фланкетують слона на g7, дозволяючи білим зайняти центр","В обох немає пішака d6"], correct:1},
+    {q:"Що таке Австрійська атака?", options:["Найспокійніший план білих", "Негайне захоплення простору ходом f4", "Гамбіт пішака e4"], correct:1},
+  ],
+  alekhine: [
+    {q:"Яка головна ідея Захисту Алехіна?", options:["Спровокувати білих на подальші пішакові ходи, щоб потім атакувати перерозтягнутий центр","Одразу забрати пішака e4","Уникнути будь-якого контакту в центрі"], correct:0},
+    {q:"Що таке Чотирипішакова атака?", options:["Білі займають центр чотирма пішаками (c4-d4-e4-f4)","Чорні жертвують чотири пішаки","Розмінний варіант без пішакової напруги"], correct:0},
+  ],
+  london: [
+    {q:"У чому суть Лондонської системи як «схеми»?", options:["Білі щоразу змінюють план залежно від ходів чорних","Білі розвиваються за майже однаковою схемою незалежно від відповіді чорних","Це суто гамбітний дебют"], correct:1},
+    {q:"Хто зробив Лондонську систему елітною зброєю у 2016–2019 роках?", options:["Бобі Фішер","Магнус Карлсен та інші топ-гравці","Пол Морфі"], correct:1},
+  ],
+  scotch: [
+    {q:"Хто воскресив Шотландську партію як несподівану зброю проти Карпова 1990 року?", options:["Магнус Карлсен","Гарі Каспаров","Бобі Фішер"], correct:1},
+    {q:"Що отримують чорні після 5.Nxc6 bxc6?", options:["Пару слонів як компенсацію за здвоєні пішаки","Негайний мат","Втрату права рокіровки"], correct:0},
+  ],
+  kingsgambit: [
+    {q:"У чому суть Гамбіту короля?", options:["Білі віддають пішак f заради темпу, відкритої лінії «f» і швидкої атаки","Чорні одразу жертвують ферзя","Це найспокійніший з усіх дебютів"], correct:0},
+    {q:"Яка відповідь чорних вважається найпринциповішим спростуванням Гамбіту короля?", options:["Гамбіт слона","Контргамбіт Фалькбеєра (2...d5)","Негайна рокіровка"], correct:1},
+  ],
+};
+
+function buildRefQuiz(container, id){
+  const questions = REF_QUIZZES[id];
+  if(!questions || !questions.length) return;
+  const section = document.createElement('div');
+  section.className = 'ref-quiz';
+  section.innerHTML = '<h3>Перевір себе</h3>';
+  questions.forEach((q, qi)=>{
+    const qBox = document.createElement('div');
+    qBox.className = 'ref-quiz-q';
+    const qText = document.createElement('p');
+    qText.className = 'ref-quiz-question';
+    qText.textContent = (qi + 1) + '. ' + q.q;
+    qBox.appendChild(qText);
+    const optsBox = document.createElement('div');
+    optsBox.className = 'ref-quiz-options';
+    q.options.forEach((optText, oi)=>{
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'ref-quiz-opt';
+      btn.textContent = optText;
+      btn.addEventListener('click', ()=>{
+        const allBtns = optsBox.querySelectorAll('.ref-quiz-opt');
+        allBtns.forEach(b => b.disabled = true);
+        if(oi === q.correct){
+          btn.classList.add('correct');
+        } else {
+          btn.classList.add('wrong');
+          allBtns[q.correct].classList.add('correct');
+        }
+      });
+      optsBox.appendChild(btn);
+    });
+    qBox.appendChild(optsBox);
+    section.appendChild(qBox);
+  });
+  container.appendChild(section);
+}
+
 /* ===================== ДОВІДНИК =====================
    Суто текстова вкладка: жодної дошки й жодного стану гри, лише стаття з
    REFERENCE. clearReplayTimers на всяк випадок, якщо сюди перейшли просто
@@ -3142,7 +3390,9 @@ function selectReference(id){
     ${OPENINGS.some(o=>o.id===ref.id) ? `<button class="btn" id="openTrainerBtn">🎯 Тренувати цей дебют</button>` : ''}
     ${ref.article}
   `;
+  buildRefQuiz(referenceArticleEl, ref.id);
   buildRefQuickNav(referenceArticleEl);
+  insertRefDiagram(referenceArticleEl, ref.id);
   applyGlossaryTooltips(referenceArticleEl);
   const openTrainerBtn = document.getElementById('openTrainerBtn');
   if(openTrainerBtn){
