@@ -508,6 +508,55 @@
   .reference-article ul{margin:0 0 12px;padding-left:20px;max-width:74ch;}
   .reference-article li{margin-bottom:6px;font-size:0.94rem;color:var(--text);}
   .reference-article strong{color:var(--gold-soft);}
+  .ref-quicknav{
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    margin:0 0 20px;
+    padding-bottom:16px;
+    border-bottom:1px solid var(--line);
+  }
+  .ref-quicknav a{
+    display:inline-flex;
+    align-items:center;
+    padding:5px 12px;
+    border-radius:999px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text-muted);
+    font-size:0.78rem;
+    text-decoration:none;
+    white-space:nowrap;
+    transition:border-color .15s, color .15s;
+  }
+  .ref-quicknav a:hover, .ref-quicknav a:focus-visible{border-color:var(--gold-soft);color:var(--gold-soft);}
+  .gterm{
+    border-bottom:1px dotted var(--gold-soft);
+    cursor:help;
+    position:relative;
+  }
+  .gterm:hover, .gterm:focus{color:var(--gold-soft);outline:none;}
+  .gterm:hover::after, .gterm:focus::after{
+    content:attr(data-def);
+    position:absolute;
+    left:50%;
+    top:calc(100% + 7px);
+    transform:translateX(-50%);
+    width:max-content;
+    max-width:min(260px, calc(100vw - 32px));
+    background:var(--panel-2);
+    border:1px solid var(--gold-soft);
+    color:var(--text);
+    font-style:normal;
+    font-weight:400;
+    font-size:0.8rem;
+    line-height:1.4;
+    padding:8px 10px;
+    border-radius:8px;
+    box-shadow:0 6px 18px rgba(0,0,0,.45);
+    z-index:50;
+    white-space:normal;
+  }
   .ref-line{
     display:block;
     font-family:var(--font-mono);
@@ -2988,6 +3037,95 @@ function updateStatsLine(){
   statsLine.innerHTML = `Дебюти вивчено: <strong>${opDone}/${OPENINGS.length}</strong> · Задачі розв'язано: <strong>${tacDone}/${PUZZLES.length}</strong> · CCT: <strong>${cctDone}/${CCT_PUZZLES.length}</strong> · Ендшпілі: <strong>${egDone}/${ENDGAMES.length}</strong>${dueHtml}${streakHtml}`;
 }
 
+// Короткий словник дебютного жаргону для підказок у "Довіднику" — кожен термін
+// підсвічується лише при першому вживанні в статті (regex ловить типові
+// українські закінчення через \p{L}*, щоб не плодити список форм вручну).
+// (?<![\p{L}]) на початку кожного патерну — це заміна \b для кирилиці (яку
+// JS-двигун regex у \b не розпізнає як "словесні" символи): без неї "табі",
+// наприклад, підхоплював би середину слова "стабільний".
+const GLOSSARY = [
+  {id:'gambit', re:/(?<![\p{L}])гамбіт\p{L}*/iu, def:"Дебют чи хід, у якому свідомо віддають пішака (рідше фігуру) заради темпу, розвитку чи атаки."},
+  {id:'fianchetto', re:/(?<![\p{L}])фланкет\p{L}*/iu, def:"Розвиток слона на довгу діагональ ходом пішака на b3/g3 (у білих) чи b6/g6 (у чорних), а не на класичне поле."},
+  {id:'iqp', re:/(?<![\p{L}])ізольован\p{L}*/iu, def:"Пішак без сусідів на суміжних вертикалях — його неможливо захистити іншим пішаком; слабкість в ендшпілі, часто джерело фігурної активності в мідлгеймі."},
+  {id:'doubled', re:/(?<![\p{L}])здвоєн\p{L}*/iu, def:"Два пішаки однієї сторони на одній вертикалі, що виникають після взяття фігурою, — зазвичай структурна слабкість."},
+  {id:'minority', re:/(?<![\p{L}])атак\p{L}*\s+меншост\p{L}*/iu, def:"План просунути меншу пішакову масу на фланзі (напр. a+b проти a+b+c), щоб створити слабкість у суперника, а не здобути матеріал."},
+  {id:'zwischenzug', re:/(?<![\p{L}])цвішенцуг\p{L}*/iu, def:"Несподіваний «проміжний» хід замість очікуваного продовження (напр. розміну), що виграє темп чи матеріал."},
+  {id:'prophylaxis', re:/(?<![\p{L}])профілактич\p{L}*|(?<![\p{L}])профілактик\p{L}*/iu, def:"Хід, який не атакує напряму, а заздалегідь усуває загрозу чи план суперника."},
+  {id:'pin', re:/(?<![\p{L}])зв'язк\p{L}*/iu, def:"Фігура не може (чи не хоче) відійти з лінії атаки, бо за нею стоїть цінніша фігура — часто король."},
+  {id:'fork', re:/(?<![\p{L}])вилк\p{L}*/iu, def:"Один хід атакує одразу дві чи більше фігур суперника, і захистити всі неможливо."},
+  {id:'tabiya', re:/(?<![\p{L}])табі\p{L}*/iu, def:"Стандартна, добре відома позиція, до якої партія доходить теоретичними ходами, перш ніж почнеться самостійна гра."},
+  {id:'chain', re:/(?<![\p{L}])пішаков\p{L}*\s+ланцюг\p{L}*/iu, def:"Кілька пішаків по діагоналі, що захищають один одного, — атакувати такий ланцюг найефективніше біля його основи."},
+  {id:'opposition', re:/(?<![\p{L}])опозиці\p{L}*/iu, def:"У пішакових ендшпілях — королі стоять один навпроти одного через непарну кількість полів, що змушує суперника відступити першим."},
+];
+
+// Обгортає перше входження кожного терміна зі словника в <span class="gterm">
+// з підказкою в data-def; заголовки й уже оброблені вузли пропускає, щоб не
+// підсвічувати те саме двічі і не чіпати h2/h3.
+function applyGlossaryTooltips(container){
+  const used = new Set();
+  const skipTags = new Set(['H2','H3','A','NAV']);
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node){
+      let el = node.parentElement;
+      while(el && el !== container){
+        if(skipTags.has(el.tagName) || el.classList.contains('gterm')) return NodeFilter.FILTER_REJECT;
+        el = el.parentElement;
+      }
+      return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }
+  });
+  const textNodes = [];
+  let n;
+  while((n = walker.nextNode())) textNodes.push(n);
+
+  for(const node of textNodes){
+    if(used.size === GLOSSARY.length) break;
+    const text = node.nodeValue;
+    let earliest = null;
+    for(const g of GLOSSARY){
+      if(used.has(g.id)) continue;
+      const m = g.re.exec(text);
+      if(m && (!earliest || m.index < earliest.index)) earliest = {index:m.index, length:m[0].length, term:g};
+    }
+    if(!earliest) continue;
+    used.add(earliest.term.id);
+    const before = text.slice(0, earliest.index);
+    const matched = text.slice(earliest.index, earliest.index + earliest.length);
+    const after = text.slice(earliest.index + earliest.length);
+    const span = document.createElement('span');
+    span.className = 'gterm';
+    span.tabIndex = 0;
+    span.dataset.def = earliest.term.def;
+    span.textContent = matched;
+    const parent = node.parentNode;
+    parent.insertBefore(document.createTextNode(before), node);
+    parent.insertBefore(span, node);
+    parent.insertBefore(document.createTextNode(after), node);
+    parent.removeChild(node);
+  }
+}
+
+// Будує панель швидких переходів по розділах статті (кожному <h3> — свій якір)
+// і вставляє її одразу перед першим розділом, під теглайном.
+function buildRefQuickNav(container){
+  const heads = container.querySelectorAll('h3');
+  if(!heads.length) return;
+  const nav = document.createElement('nav');
+  nav.className = 'ref-quicknav';
+  heads.forEach((h, i)=>{
+    h.id = 'refsec-' + i;
+    const a = document.createElement('a');
+    a.href = '#refsec-' + i;
+    a.textContent = h.textContent;
+    a.addEventListener('click', (e)=>{
+      e.preventDefault();
+      h.scrollIntoView({behavior:'smooth', block:'start'});
+    });
+    nav.appendChild(a);
+  });
+  container.insertBefore(nav, heads[0]);
+}
+
 /* ===================== ДОВІДНИК =====================
    Суто текстова вкладка: жодної дошки й жодного стану гри, лише стаття з
    REFERENCE. clearReplayTimers на всяк випадок, якщо сюди перейшли просто
@@ -3004,6 +3142,8 @@ function selectReference(id){
     ${OPENINGS.some(o=>o.id===ref.id) ? `<button class="btn" id="openTrainerBtn">🎯 Тренувати цей дебют</button>` : ''}
     ${ref.article}
   `;
+  buildRefQuickNav(referenceArticleEl);
+  applyGlossaryTooltips(referenceArticleEl);
   const openTrainerBtn = document.getElementById('openTrainerBtn');
   if(openTrainerBtn){
     openTrainerBtn.addEventListener('click', ()=>{
