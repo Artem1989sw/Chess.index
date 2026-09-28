@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Шаховий тренажер — дебюти та тактика</title>
+<title>Шаховий тренажер — дебюти, тактика, ендшпілі, аналіз партій</title>
+<meta name="description" content="Безкоштовний шаховий тренажер українською: дебютні лінії, тактика, ендшпілі, гра проти Stockfish та аналіз власних партій. Без реєстрації, прогрес зберігається у браузері.">
+<meta name="theme-color" content="#211C17">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -26,6 +29,8 @@
     --font-display:'Fraunces', serif;
     --font-body:'Inter', sans-serif;
     --font-mono:'IBM Plex Mono', monospace;
+    /* розмір дошки враховує поля сторінки й панелі, щоб на телефоні вона не вилазила за край */
+    --board-size:min(420px, calc(100vw - 72px));
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -95,7 +100,11 @@
     gap:6px;
     margin:22px 0 18px;
     border-bottom:1px solid var(--line);
+    overflow-x:auto;
+    scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
   }
+  .tabs::-webkit-scrollbar{display:none;}
   .tab-btn{
     appearance:none;
     background:transparent;
@@ -106,14 +115,16 @@
     font-size:0.95rem;
     padding:10px 4px;
     margin-right:22px;
+    white-space:nowrap;
+    flex:0 0 auto;
     cursor:pointer;
     border-bottom:2px solid transparent;
     transition:color .15s ease, border-color .15s ease;
   }
   .tab-btn:hover{color:var(--text);}
   .tab-btn.active{color:var(--gold-soft);border-bottom-color:var(--gold);}
-  .tab-btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
-  .item-list-label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-dim,#8a8a99);margin:0.9rem 0 0.3rem 0.2rem;opacity:0.75;}
+  .tab-btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:-2px;}
+  .item-list-label{font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--text-muted);margin:0.9rem 0 0.3rem 0.2rem;}
   .item-list-label:first-child{margin-top:0.2rem;}
 
   .stats-line{
@@ -125,28 +136,34 @@
 
   .layout{
     display:grid;
-    grid-template-columns:250px 1fr;
+    grid-template-columns:250px minmax(0,1fr);
     gap:22px;
     align-items:start;
   }
-  @media (max-width:760px){
-    .layout{grid-template-columns:1fr;}
-    .item-list{
-      display:flex;
-      flex-direction:row;
-      overflow-x:auto;
-      gap:8px;
-      padding-bottom:6px;
-    }
-    .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
-    .item-list .item-row{flex:0 0 auto;}
-  }
-
   .item-list{
     display:flex;
     flex-direction:column;
     gap:6px;
   }
+  @media (max-width:760px){
+    .layout{grid-template-columns:minmax(0,1fr);}
+    .item-list{
+      flex-direction:row;
+      align-items:center;
+      overflow-x:auto;
+      gap:8px;
+      padding-bottom:6px;
+    }
+    .item-list .item-btn{white-space:nowrap;flex:0 0 auto;}
+    .item-list .item-btn .item-label span.txt{display:block;white-space:nowrap;text-overflow:ellipsis;}
+    .item-list .item-row{flex:0 0 auto;}
+    .item-list .diff-filter{flex:0 0 auto;flex-wrap:nowrap;margin-bottom:0;}
+    .item-list .item-list-label{flex:0 0 auto;white-space:nowrap;margin:0;}
+  }
+  @media (max-width:560px){
+    .main-panel{padding:14px;}
+  }
+
   .item-btn{
     text-align:left;
     background:var(--panel);
@@ -203,6 +220,7 @@
   .rep-star:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
 
   .main-panel{
+    min-width:0;
     background:var(--panel);
     border:1px solid var(--line);
     border-radius:10px;
@@ -232,7 +250,7 @@
 
   .board-col{flex:0 0 auto;}
 
-  .board-wrap{position:relative;width:min(420px,88vw);height:min(420px,88vw);}
+  .board-wrap{position:relative;width:var(--board-size);height:var(--board-size);}
   .hint-arrows{
     position:absolute;
     top:0;left:0;
@@ -251,8 +269,8 @@
     display:grid;
     grid-template-columns:repeat(8,1fr);
     grid-template-rows:repeat(8,1fr);
-    width:min(420px,88vw);
-    height:min(420px,88vw);
+    width:var(--board-size);
+    height:var(--board-size);
     border:3px solid var(--walnut-dark);
     border-radius:4px;
     overflow:hidden;
@@ -308,7 +326,7 @@
   .sq.light .sq-coord{color:var(--walnut);}
   .sq.dark .sq-coord{color:var(--ivory);}
   .piece{
-    font-size:min(9vw,42px);
+    font-size:calc(var(--board-size) * 0.1);
     line-height:1;
     z-index:2;
     cursor:grab;
@@ -673,7 +691,7 @@
   .diff-dot.medium{background:var(--gold);}
   .diff-dot.hard{background:var(--clay);}
   .item-btn .item-label{display:flex;align-items:center;min-width:0;}
-  .item-btn .item-label span.txt{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .item-btn .item-label span.txt{overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;}
   .item-label-text{display:flex;flex-direction:column;min-width:0;}
   .item-due-note{
     font-size:0.68rem;
@@ -711,7 +729,7 @@
 
   /* ---- Гра проти бота (Stockfish) ---- */
   .eval-col{display:flex;flex-direction:column;align-items:center;gap:6px;flex:0 0 auto;}
-  .eval-bar{position:relative;width:20px;height:min(420px,88vw);background:#241811;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
+  .eval-bar{position:relative;width:20px;height:var(--board-size);background:#241811;border:1px solid var(--line);border-radius:4px;overflow:hidden;}
   .eval-bar-fill{position:absolute;left:0;bottom:0;width:100%;background:#F7F1E3;transition:height .35s ease;}
   .eval-bar-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);}
   .engine-status{font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;}
@@ -860,6 +878,15 @@
     transform:translate(-50%,-50%);
   }
 
+  /* Сенсорні екрани: цілі натискання не менші за ~40px */
+  @media (pointer:coarse){
+    .diff-btn{padding:9px 13px;}
+    .rep-star{width:40px;}
+    .btn{padding:11px 14px;}
+    .theme-toggle{width:44px;height:44px;}
+    .strip-arrow-btn{width:40px;height:40px;}
+  }
+
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
   }
@@ -878,7 +905,7 @@
   </header>
 
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="openings">Дебюти</button>
+    <button class="tab-btn active" data-tab="openings" aria-current="page">Дебюти</button>
     <button class="tab-btn" data-tab="tactics">Тактика</button>
     <button class="tab-btn" data-tab="cct">Зівки (CCT)</button>
     <button class="tab-btn" data-tab="endgames">Ендшпілі</button>
@@ -889,7 +916,7 @@
 
   <div class="stats-line" id="statsLine"></div>
 
-  <div class="layout">
+  <main class="layout">
     <div class="item-list" id="itemList"></div>
 
     <div class="main-panel">
@@ -921,7 +948,7 @@
           </div>
         </div>
         <div class="info-col">
-          <div class="status-msg" id="statusMsg">Обери пункт зі списку зліва.</div>
+          <div class="status-msg" id="statusMsg" role="status" aria-live="polite">Обери пункт зі списку зліва.</div>
           <div class="move-list" id="moveList"></div>
           <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
           <div id="principleMoveStrip" class="move-strip" style="display:none;"></div>
@@ -965,7 +992,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </main>
 </div>
 
 <script>
@@ -996,7 +1023,7 @@ const PRINCIPLE_TUNING = {
 
 const OPENINGS = [
   {id:"italian", name:"Італійська партія", eco:"C50", side:"white", coreMoves:6,
-   moves:["e4","e5","Nf3","Nc6","Bc4","Bc5","c3","Nf6","d3","d6","O-O","O-O"], moveComments:["Захоплюємо центр і відкриваємо дорогу слону та ферзю.","Чорні відповідають симетрично, борючись за центр.","Розвиваємо коня з нападом на пішака e5.","Чорні захищають пішака e5, розвиваючи фігуру.","Слон одразу цілиться в найслабший пункт чорних — f7.","Джуоко Піано: чорні відповідають дзеркально, розвиваючи слона назустріч.","Готуємо d4, забезпечуючи слону в разі потреби відступ на b3 чи c2.","Чорні розвивають коня, борючись за центр і атакуючи e4.","Джуоко Пianissimo: білі не поспішають з d4, спершу завершуючи розвиток.","Чорні дзеркалять і собі готують рокіровку.","Ховаємо короля в безпеку, готуючись до маневрів у центрі.","Чорні також рокіруються — типова спокійна італійська з обопільними шансами."],
+   moves:["e4","e5","Nf3","Nc6","Bc4","Bc5","c3","Nf6","d3","d6","O-O","O-O"], moveComments:["Захоплюємо центр і відкриваємо дорогу слону та ферзю.","Чорні відповідають симетрично, борючись за центр.","Розвиваємо коня з нападом на пішака e5.","Чорні захищають пішака e5, розвиваючи фігуру.","Слон одразу цілиться в найслабший пункт чорних — f7.","Джуоко Піано: чорні відповідають дзеркально, розвиваючи слона назустріч.","Готуємо d4, забезпечуючи слону в разі потреби відступ на b3 чи c2.","Чорні розвивають коня, борючись за центр і атакуючи e4.","Джуоко Піанісимо: білі не поспішають з d4, спершу завершуючи розвиток.","Чорні дзеркалять і собі готують рокіровку.","Ховаємо короля в безпеку, готуючись до маневрів у центрі.","Чорні також рокіруються — типова спокійна італійська з обопільними шансами."],
    description:"Класичний розвиваючий дебют — слон одразу цілиться у слабкий пункт f7.",
    theory:{
      idea:"Швидкий розвиток фігур із негайним тиском на слабкий пункт f7, який до рокіровки захищає лише король.",
@@ -1373,7 +1400,7 @@ const REFERENCE = [
   {id:"italian", name:"Італійська партія", eco:"C50", article:`
     <p class="ref-tagline">Один із найстаріших дебютів у шаховій історії — прямий, логічний розвиток фігур із негайним прицілом на найслабший пункт чорних, f7.</p>
     <h3>Ідея та стиль</h3>
-    <p>Італійська партія відома ще з XVI століття (її аналізували Полеріо й Греко) і була головною зброєю епохи романтичних шахів — Андерсена, Морфі, молодого Стейніца. Пізніше, коли теорія Іспанської партії пішла далеко вперед, Італійська на кілька десятиліть вважалася на елітному рівні дещо «безпечною» — чорні легко зрівнювали шанси. Усе змінилося у 2010-х: Каспаров, а особливо Магнус Карлсен, показали, що «тиха» система з c3 і d3 (Джуоко Пianissimo) дає білим довгу, безпечну гру без ризику наштовхнутися на глибоку домашню підготовку суперника — і дебют пережив потужне відродження на найвищому рівні.</p>
+    <p>Італійська партія відома ще з XVI століття (її аналізували Полеріо й Греко) і була головною зброєю епохи романтичних шахів — Андерсена, Морфі, молодого Стейніца. Пізніше, коли теорія Іспанської партії пішла далеко вперед, Італійська на кілька десятиліть вважалася на елітному рівні дещо «безпечною» — чорні легко зрівнювали шанси. Усе змінилося у 2010-х: Каспаров, а особливо Магнус Карлсен, показали, що «тиха» система з c3 і d3 (Джуоко Піанісимо) дає білим довгу, безпечну гру без ризику наштовхнутися на глибоку домашню підготовку суперника — і дебют пережив потужне відродження на найвищому рівні.</p>
     <p>Підходить і тактикам, і позиційним гравцям. Гострі лінії (Гамбіт Еванса, Захист двох коней) винагороджують точний розрахунок і знання пасток; тиха система винагороджує терпіння, розуміння малих переваг і вміння грати довгі партії без прямого ризику.</p>
     <h3>Кому підходить і як вивчати</h3>
     <ul>
@@ -1383,7 +1410,7 @@ const REFERENCE = [
       <li>Зіграй кілька тренувальних партій Гамбітом Еванса, щоб відчути, як тимчасова жертва пішака перетворюється на довгостроковий тиск і перевагу в розвитку.</li>
     </ul>
     <h3>Основні варіанти</h3>
-    <p><strong>Джуоко Пianissimo (тиха система, c3+d3):</strong> сучасний головний вибір елітних гравців. Білі не форсують події в центрі, а спершу рокіруються і закінчують розвиток, залишаючи собі вибір між повільним d4 пізніше й грою на невеликий, стабільний плюс.</p>
+    <p><strong>Джуоко Піанісимо (тиха система, c3+d3):</strong> сучасний головний вибір елітних гравців. Білі не форсують події в центрі, а спершу рокіруються і закінчують розвиток, залишаючи собі вибір між повільним d4 пізніше й грою на невеликий, стабільний плюс.</p>
     <p><strong>Гамбіт Еванса (4.b4):</strong> романтична жертва пішака заради темпу на слоні й потужного центру c3-d4. Улюблена зброя Морфі та Андерсена; пережила несподіване відродження, коли Каспаров дістав її з «музею» у 1990-х.</p>
     <p><strong>Захист двох коней (3...Nf6):</strong> чорні контратакують e4 замість спокійного розвитку. Веде до окремого комплексу гострої теорії — Атака Фрід Лівер (4.Ng5 d5 5.exd5 Nxd5 6.Nxf7!?) і Контргамбіт Траксела (4.Ng5 Bc5!?).</p>
     <p><strong>Угорський захист (3...Be7):</strong> найскромніша відповідь чорних — надійно, але пасивно; білі отримують вільний вибір плану без жодного ризику.</p>
@@ -1402,7 +1429,7 @@ const REFERENCE = [
     <p><strong>→ Шотландський гамбіт:</strong> після 3.d4 exd4 4.Bc4 білі отримують ту саму диспозицію слона на c4 проти чорних фігур, що й в Італійській, — фактично той самий дебют іншим порядком ходів.</p>
     <p><strong>→ Дебют чотирьох коней:</strong> якщо білі спершу грають 3.Nc3 і лише потім 4.Bc4 (чи навпаки чорні відповідають Nf6 раніше Bc5), партія може плавно перейти в італійську версію Дебюту чотирьох коней.</p>
     <h3>Типові ендшпілі</h3>
-    <p>Гострі лінії (Гамбіт Еванса, Фрід-Ліверська атака) рідко доживають до ендшпілю — результат вирішується прямою атакою в мідлгеймі. А ось тиха система (Джуоко Пianissimo) часто веде до довгих ендшпілів з однойменними чи різнойменними слонами, де перевагу означає не матеріал, а активність фігур і кращий пішак — саме такі позиції десятками вигравав Карлсен у 2010-х.</p>
+    <p>Гострі лінії (Гамбіт Еванса, Фрід-Ліверська атака) рідко доживають до ендшпілю — результат вирішується прямою атакою в мідлгеймі. А ось тиха система (Джуоко Піанісимо) часто веде до довгих ендшпілів з однойменними чи різнойменними слонами, де перевагу означає не матеріал, а активність фігур і кращий пішак — саме такі позиції десятками вигравав Карлсен у 2010-х.</p>
     <h3>Хронологія розвитку теорії</h3>
     <p><strong>XVI–XVII ст. (Полеріо, Греко):</strong> перші систематичні аналізи дебюту.</p>
     <p><strong>Романтична епоха (Андерсен, Морфі, молодий Стейніц):</strong> головна арена гострих комбінаційних партій XIX століття.</p>
@@ -1521,7 +1548,7 @@ const REFERENCE = [
     <div class="ref-game">
       <div class="ref-game-title">Фішер — Спаський, матч за звання чемпіона світу, Рейк'явік 1972 (стиль Фішера проти Найдорфа)</div>
       <span class="ref-game-line">1.e4 c5 2.Nf3 d6 3.d4 cxd4 4.Nxd4 Nf6 5.Nc3 a6 6.Bc4 (Атака Фішера-Созіна)</span>
-      <p>Фішер usав Найдорф і як білими (атакою Созіна), і зі знанням найтонших нюансів як чорними — цей дебют був фундаментом усієї його дебютної підготовки проти 1.e4 упродовж кар'єри, включно з історичним матчем 1972 року.</p>
+      <p>Фішер грав Найдорф і як білими (атакою Созіна), і зі знанням найтонших нюансів як чорними — цей дебют був фундаментом усієї його дебютної підготовки проти 1.e4 упродовж кар'єри, включно з історичним матчем 1972 року.</p>
     </div>
   `},
   {id:"sicilianDragon", name:"Сицилійський захист, Дракон", eco:"B70", article:`
@@ -2638,7 +2665,7 @@ const PUZZLES = [
    fen:"6k1/5ppp/8/8/Q7/8/8/6K1 w - - 0 1",
    solution:["Qe8#"],
    hint:"Королю чорних нікуди тікати — власні пішаки перекрили всі поля другого ряду.",
-   explanation:"Ферзь іде по діагоналі на e8 із шахом по 8-й горизонталі. Пішаки f7, g7, h7 позбавляють короля будь-якого відступу — мат."},
+   explanation:"Ферзь іде по діагоналі на e8 із шахом по 8-й горизонталі. Пішаки f7, g7, h7 позбавляють короля будь-якого відступу — мат. Так само мат ставить і Qa8# по вертикалі «a» — ідея та сама."},
   {id:"p17", difficulty:"hard", theme:"Проміжний хід (цвішенцуг)",
    fen:"6k1/5ppp/2p5/3N4/8/8/8/R5K1 w - - 0 1",
    solution:["Ra8#"],
@@ -2811,6 +2838,7 @@ let principleMoveLog = []; // {moveNo, san, lossCp, bestSan} для кожног
 // писати застарілий результат (гравець встиг скасувати хід чи почати заново, поки рушій рахував).
 let principleGen = 0;
 let tacticsFilter = 'all'; // фільтр складності на вкладці "Тактика": all | easy | medium | hard
+let hintStep = 0; // підказка в дебютах: 0 — не просили, 1 — показано поле, 2 — показано сам хід
 
 // ---- Гра проти бота (Stockfish) ----
 // Stockfish 17.1 (NNUE, "lite" мережа), однопотокова wasm-збірка — без потреби
@@ -2819,16 +2847,18 @@ const STOCKFISH_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lit
 const STOCKFISH_WASM_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm';
 const HELPER_ANALYSIS_DEPTH = 18; // на скільки півходів прораховує "чесний" рушій для оцінки й підказок
 const MIN_HINT_DEPTH = 12; // раніші (мілкі) info-рядки ще не показуємо — вони часто дають кривий хід
+// Мінімум опції UCI_Elo у Stockfish 17.1 — 1320: рівні 800/1200 просто грали б як 1320.
+// Тому нижня межа тут — реальний мінімум, а «Максимальний» вимикає обмеження сили (elo:null).
 const BOT_LEVELS = [
-  {label:'Дуже слабкий', elo:800},
-  {label:'Слабкий', elo:1200},
+  {label:'Початківець', elo:1320},
   {label:'Середній', elo:1600},
   {label:'Сильний', elo:2000},
   {label:'Дуже сильний', elo:2400},
-  {label:'Максимальний', elo:2850}
+  {label:'Майстер', elo:2850},
+  {label:'Максимальний', elo:null}
 ];
 let botColor = 'w'; // кольором якого грає користувач у вкладці "Проти бота"
-let botEloIdx = 4; // за замовчуванням Elo 2400
+let botEloIdx = 3; // за замовчуванням Elo 2400
 let botHintsOn = false;
 let judgeEngine = null; // окремий рушій повної сили — лише для оцінки ходів гравця у вільній частині дебютів
 let botEngine = null;   // грає ходи за суперника (обмежена сила через UCI_LimitStrength)
@@ -2855,6 +2885,15 @@ function clearReplayTimers(){
 function scheduleEngineMove(fn, delay){
   if(engineMoveTimer) clearTimeout(engineMoveTimer);
   engineMoveTimer = setTimeout(fn, delay);
+}
+
+// Кнопки «Переглянути / Тренувати» стоять у шапці, а дошка — далеко нижче:
+// підводимо її в поле зору, щоб гравець бачив, що відбувається.
+function revealBoard(){
+  const r = boardAreaEl.getBoundingClientRect();
+  if(r.top < 0 || r.bottom > window.innerHeight){
+    boardAreaEl.scrollIntoView({behavior:'smooth', block:'start'});
+  }
 }
 
 const PROG_KEY_OPENINGS = 'chess_trainer_openings_progress_v1';
@@ -2935,6 +2974,13 @@ function formatDueIn(dueAt){
 function markCompleted(key, id){
   const prog = loadProgress(key);
   const prev = prog[id];
+  // Тренування ДО настання строку повторення не подовжує інтервал: інакше 5 проходжень
+  // поспіль за один вечір «вчать» пункт одразу на 16 днів уперед і SRS втрачає сенс.
+  if(prev && typeof prev === 'object' && prev.dueAt && prev.dueAt > Date.now()){
+    prog[id] = Object.assign({}, prev, {done:true, lastAt: Date.now()});
+    saveProgress(key, prog);
+    return;
+  }
   const prevReps = (prev && typeof prev === 'object' && prev.reps) ? prev.reps : 0;
   const reps = prevReps + 1;
   const intervalDays = Math.min(SRS_MAX_INTERVAL_DAYS, Math.pow(2, reps - 1));
@@ -2991,6 +3037,9 @@ function resetInfoPanels(){
   analysisBtnBox.style.display = 'none';
   principleMoveStripEl.style.display = 'none';
   principleGen++; // інвалідує будь-яку ще не завершену async-оцінку ходу для попереднього пункту
+  hintStep = 0;
+  hintArrow1El.style.display = 'none';
+  hintArrow2El.style.display = 'none';
 }
 const statsLine = document.getElementById('statsLine');
 const themeToggleBtn = document.getElementById('themeToggle');
@@ -3009,9 +3058,13 @@ themeToggleBtn.addEventListener('click', ()=>{
 
 document.querySelectorAll('.tab-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
-    document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b=>{ b.classList.remove('active'); b.removeAttribute('aria-current'); });
     btn.classList.add('active');
+    btn.setAttribute('aria-current', 'page');
+    btn.scrollIntoView({block:'nearest', inline:'nearest'}); // на вузьких екранах вкладки прокручуються
     currentTab = btn.dataset.tab;
+    // У «Проти бота» є власний перемикач підказок рушія — загальна кнопка там зайва
+    document.getElementById('hintBtn').style.display = currentTab === 'bot' ? 'none' : '';
     if(currentTab !== 'bot'){
       evalColEl.style.display = 'none';
       botBoxEl.style.display = 'none';
@@ -3146,6 +3199,30 @@ document.getElementById('nextBtn').addEventListener('click', ()=>{
   }
 });
 document.getElementById('hintBtn').addEventListener('click', ()=>{
+  // Дебюти: підказка стосується САМЕ наступного ходу лінії (раніше тут показувався
+  // порожній блок або текст останньої розв'язаної задачі). Спершу — лише поле, з якого
+  // ходити; другим натисканням — сам хід зі стрілкою.
+  if(currentTab === 'openings'){
+    const expected = (currentOpening && !freePlay && !principleMode && !isReplaying && chess.turn() === userColor)
+      ? currentOpening.moves[moveIndex] : null;
+    const probe = expected ? new Chess(chess.fen()) : null;
+    const mv = probe ? probe.move(expected) : null;
+    if(!mv){
+      hintBox.textContent = 'Підказки працюють в обов\'язковій частині лінії, коли твоя черга ходити.';
+      hintBox.style.display = 'block';
+      return;
+    }
+    hintStep = Math.min(2, hintStep + 1);
+    if(hintStep === 1){
+      hintBox.textContent = 'Підказка: ходи фігурою з поля ' + mv.from + '. Натисни «Підказка» ще раз, щоб побачити сам хід.';
+    } else {
+      hintBox.textContent = 'Правильний хід: ' + expected + '.';
+      setArrow(hintArrow1El, mv.from + mv.to + (mv.promotion || ''), HINT_ARROW_HEAD_LEN.primary);
+      hintArrow2El.style.display = 'none';
+    }
+    hintBox.style.display = 'block';
+    return;
+  }
   hintBox.style.display = hintBox.style.display === 'none' ? 'block' : 'none';
 });
 document.getElementById('flipBtn').addEventListener('click', ()=>{
@@ -3171,7 +3248,8 @@ function renderItemList(){
     const b = document.createElement('button');
     b.className = 'item-btn' + (done ? ' done' : '') + (due ? ' due' : '');
     const dueNoteText = (entry && typeof entry === 'object' && entry.dueAt && !due) ? `Повторення: ${formatDueIn(entry.dueAt)}` : '';
-    b.title = due ? 'Час повторити ще раз' : dueNoteText ? dueNoteText : (done ? 'Вже пройдено' : '');
+    const fullName = it.name || it.theme;
+    b.title = fullName + (due ? ' — час повторити ще раз' : dueNoteText ? ' — ' + dueNoteText : (done ? ' — вже пройдено' : ''));
     const dot = it.difficulty ? `<span class="diff-dot ${it.difficulty}" title="${DIFFICULTY_LABELS[it.difficulty]}"></span>` : '';
     const dueNoteHtml = dueNoteText ? `<span class="item-due-note">${dueNoteText}</span>` : '';
     b.innerHTML = `<span class="item-label">${dot}<span class="item-label-text"><span class="txt">${it.name || it.theme}</span>${dueNoteHtml}</span></span><span class="badge">${due ? '↻' : ''}</span>`;
@@ -3718,10 +3796,19 @@ function buildRefQuiz(container, id){
     qBox.appendChild(qText);
     const optsBox = document.createElement('div');
     optsBox.className = 'ref-quiz-options';
-    q.options.forEach((optText, oi)=>{
+    // Порядок варіантів перемішується при кожному показі: у даних правильна відповідь майже
+    // завжди друга й найдовша, тож без цього квіз «вгадується» за формою, а не за знаннями.
+    const order = q.options.map((_, i) => i);
+    for(let i = order.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [order[i], order[j]] = [order[j], order[i]];
+    }
+    order.forEach((oi)=>{
+      const optText = q.options[oi];
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'ref-quiz-opt';
+      btn.dataset.idx = oi;
       btn.textContent = optText;
       btn.addEventListener('click', ()=>{
         const allBtns = optsBox.querySelectorAll('.ref-quiz-opt');
@@ -3730,7 +3817,8 @@ function buildRefQuiz(container, id){
           btn.classList.add('correct');
         } else {
           btn.classList.add('wrong');
-          allBtns[q.correct].classList.add('correct');
+          const right = optsBox.querySelector('.ref-quiz-opt[data-idx="' + q.correct + '"]');
+          if(right) right.classList.add('correct');
         }
       });
       optsBox.appendChild(btn);
@@ -3862,10 +3950,15 @@ function orderedVerboseMoves(){
   return moves;
 }
 
+const MATE_SCORE = 100000;
 function minimax(depth, alpha, beta, maximizing){
-  if(depth === 0 || chess.game_over()){
-    return evaluateBoard();
+  // Мат і нічия оцінюються окремо. Раніше позиція мату мала звичайну матеріальну оцінку,
+  // тому рушій «не бачив» мату в один хід і не боявся його. Чим ближче мат — тим краще.
+  if(chess.in_checkmate()){
+    return chess.turn() === 'w' ? -(MATE_SCORE + depth) : (MATE_SCORE + depth);
   }
+  if(chess.in_draw()) return 0;
+  if(depth === 0) return evaluateBoard();
   const moves = orderedVerboseMoves();
   if(moves.length === 0) return evaluateBoard();
   if(maximizing){
@@ -4263,6 +4356,7 @@ function trainVariation(op, variation){
     theory: null
   };
   beginOpeningTraining(synthetic, `Твій хід. Тренуємо варіант «${variation.name}».`);
+  revealBoard();
 }
 
 function renderOpeningHeader(){
@@ -4364,6 +4458,7 @@ function startLineReplay(op, line, kind, comments){
   moveCommentBox.style.display = 'none';
   renderBoard();
   renderMoveList();
+  revealBoard();
   const introLabel = kind === 'trap' ? 'Перегляд пастки: ' : kind === 'variation' ? 'Перегляд варіанту: ' : kind === 'game' ? 'Партія: ' : 'Перегляд основної лінії: ';
   setStatus(introLabel + line.name, '');
 
@@ -4468,6 +4563,15 @@ function selectPuzzle(id){
 
 function normalizeSan(s){
   return s.replace(/[+#]/g,'');
+}
+
+// Відповідь зараховується, якщо вона є в списку рішень. Для задач «мат в 1 хід»
+// зараховується й будь-який ІНШИЙ мат — інакше правильна відповідь (напр. Qa8# замість
+// Qe8# у задачі p16) отримувала б «Не зовсім» і скидала серію.
+function isSolutionMove(item, candidate){
+  const sol = item.solution || [];
+  if(sol.some(s => normalizeSan(s) === normalizeSan(candidate.san))) return true;
+  return sol.length > 0 && sol.every(s => /#$/.test(s)) && /#$/.test(candidate.san);
 }
 
 function finishPuzzle(){
@@ -4667,7 +4771,8 @@ function renderBoard(){
 
 function pieceGlyph(piece){
   const whiteGlyphs = {p:'♙',n:'♘',b:'♗',r:'♖',q:'♕',k:'♔'};
-  const blackGlyphs = {p:'♟',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
+  // \uFE0E — селектор текстового вигляду: без нього на iOS/Android чорний пішак ♟ малюється як кольоровий емодзі
+  const blackGlyphs = {p:'♟\uFE0E',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
   return piece.color === 'w' ? whiteGlyphs[piece.type] : blackGlyphs[piece.type];
 }
 
@@ -4872,6 +4977,10 @@ function attemptMove(from, to){
       const mv = chess.move(candidate);
       lastMove = mv;
       moveIndex++;
+      hintStep = 0;
+      hintBox.style.display = 'none';
+      hintArrow1El.style.display = 'none';
+      hintArrow2El.style.display = 'none';
       renderBoard();
       renderMoveList();
       showMoveComment(currentOpening, playedIndex);
@@ -4898,7 +5007,7 @@ function attemptMove(from, to){
         scheduleEngineMove(engineFreePlayMove, 300);
       }
     } else {
-      if(currentEndgameItem.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+      if(isSolutionMove(currentEndgameItem, candidate)){
         const mv = chess.move(candidate);
         lastMove = mv;
         renderBoard();
@@ -4911,7 +5020,7 @@ function attemptMove(from, to){
       }
     }
   } else if(currentTab === 'cct'){
-    if(currentCCT.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+    if(isSolutionMove(currentCCT, candidate)){
       const mv = chess.move(candidate);
       lastMove = mv;
       renderBoard();
@@ -4937,7 +5046,7 @@ function attemptMove(from, to){
     const mv = chess.move(candidate);
     analyzerPlayUserMove(fenBefore, mv);
   } else {
-    if(currentPuzzle.solution.some(s => normalizeSan(s) === normalizeSan(candidate.san))){
+    if(isSolutionMove(currentPuzzle, candidate)){
       const mv = chess.move(candidate);
       lastMove = mv;
       renderBoard();
@@ -5208,7 +5317,7 @@ function judgeUserMoveAsync(myGen, fenBefore, fenAfter, candidateSan, moveNo, pe
 function initBotEnginesIfNeeded(){
   if(botEngine || helperEngine) return;
   setEngineStatus('Завантаження рушія Stockfish…', '');
-  botEngine = createEngineController({limitStrength:true, elo: BOT_LEVELS[botEloIdx].elo, multipv:1});
+  botEngine = createEngineController({limitStrength: BOT_LEVELS[botEloIdx].elo != null, elo: BOT_LEVELS[botEloIdx].elo, multipv:1});
   helperEngine = createEngineController({limitStrength:false, multipv:2});
   const onError = ()=>{
     setEngineStatus('Не вдалося завантажити Stockfish. Перевір з\'єднання з інтернетом і онови сторінку.', 'err');
@@ -5407,11 +5516,17 @@ function renderBotLevelPicker(){
   BOT_LEVELS.forEach((lvl, i)=>{
     const b = document.createElement('button');
     b.className = 'item-btn' + (botEloIdx === i ? ' active' : '');
-    b.innerHTML = `<span class="item-label"><span class="item-label-text"><span class="txt">${lvl.label}</span></span></span><span class="badge" style="color:var(--text-muted);font-size:10px;border:none;">${lvl.elo}</span>`;
+    b.innerHTML = `<span class="item-label"><span class="item-label-text"><span class="txt">${lvl.label}</span></span></span><span class="badge" style="color:var(--text-muted);font-size:10px;border:none;">${lvl.elo || '∞'}</span>`;
     b.addEventListener('click', ()=>{
       botEloIdx = i;
+      renderBotHeader(); // заголовок показує поточний рівень — оновлюємо одразу, а не з наступною партією
       if(botEngine && botEngine.worker && !botEngine.failed){
-        botEngine.worker.postMessage('setoption name UCI_Elo value ' + lvl.elo);
+        if(lvl.elo == null){
+          botEngine.worker.postMessage('setoption name UCI_LimitStrength value false');
+        } else {
+          botEngine.worker.postMessage('setoption name UCI_LimitStrength value true');
+          botEngine.worker.postMessage('setoption name UCI_Elo value ' + lvl.elo);
+        }
       }
       renderItemList();
     });
@@ -5422,7 +5537,7 @@ function renderBotLevelPicker(){
 function renderBotHeader(){
   const lvl = BOT_LEVELS[botEloIdx];
   itemHeaderEl.innerHTML = `
-    <div class="eco">Гра проти Stockfish · граєш ${userColor === 'w' ? 'білими' : 'чорними'} · рівень: ${lvl.label} (Elo ${lvl.elo})</div>
+    <div class="eco">Гра проти Stockfish · граєш ${userColor === 'w' ? 'білими' : 'чорними'} · рівень: ${lvl.label} (${lvl.elo ? 'Elo ' + lvl.elo : 'без обмеження сили'})</div>
     <h2>Проти бота</h2>
     <p>Звичайна партія проти шахового рушія Stockfish без перевірки принципів. Обери колір і рівень суперника у списку зліва.</p>`;
 }
@@ -5628,7 +5743,7 @@ function loadSavedAnalyzerGames(){
   try{ return JSON.parse(localStorage.getItem(ANALYZER_GAMES_KEY)) || []; }catch(e){ return []; }
 }
 function saveSavedAnalyzerGamesList(list){
-  try{ localStorage.setItem(ANALYZER_GAMES_KEY, JSON.stringify(list)); }catch(e){}
+  try{ localStorage.setItem(ANALYZER_GAMES_KEY, JSON.stringify(list)); return true; }catch(e){ return false; }
 }
 function saveCurrentAnalyzerGame(){
   if(!analyzerGame) return;
@@ -5646,7 +5761,10 @@ function saveCurrentAnalyzerGame(){
     game: {startFen: analyzerGame.startFen, plies: analyzerGame.plies, white: analyzerGame.white, black: analyzerGame.black}
   });
   while(list.length > ANALYZER_GAMES_MAX) list.pop();
-  saveSavedAnalyzerGamesList(list);
+  if(!saveSavedAnalyzerGamesList(list)){
+    analyzerSetProgress('Не вдалося зберегти: сховище браузера переповнене. Видали кілька старих партій і спробуй ще раз.', true);
+    return;
+  }
   if(input) input.value = '';
   renderSavedGamesList();
   analyzerSetProgress('Партію збережено — «' + label + '».', false);
@@ -5671,6 +5789,11 @@ function deleteAnalyzerGame(id){
   saveSavedAnalyzerGamesList(list);
   renderSavedGamesList();
 }
+// Назва партії береться з PGN-заголовків (White/Black) або з поля вводу, тобто це недовірений
+// текст — без екранування він вставлявся в сторінку як HTML і зберігався в localStorage.
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+}
 function formatSavedAt(ts){
   const d = new Date(ts);
   return d.toLocaleDateString('uk-UA') + ' ' + d.toLocaleTimeString('uk-UA', {hour:'2-digit', minute:'2-digit'});
@@ -5683,9 +5806,9 @@ function renderSavedGamesList(){
   if(!list.length){ section.style.display = 'none'; return; }
   section.style.display = 'block';
   listEl.innerHTML = list.map(g => `
-    <div class="saved-game-row" data-id="${g.id}">
+    <div class="saved-game-row" data-id="${escapeHtml(g.id)}">
       <div class="saved-game-info">
-        <div class="saved-game-label">${g.label}</div>
+        <div class="saved-game-label">${escapeHtml(g.label)}</div>
         <div class="saved-game-meta">${formatSavedAt(g.savedAt)} · ${g.game.plies.length} ходів</div>
       </div>
       <button type="button" class="btn" data-action="load" title="Завантажити">▶</button>
@@ -5944,6 +6067,7 @@ function smoothSvgPath(pts){
 }
 
 const GRAPH_WINDOW = 20; // скільки півходів видно одночасно у "вікні" графіка
+let graphWinStart = 0, graphWinSpan = 1; // яке «вікно» графіка зараз намальоване — потрібно для кліку по ньому
 
 function renderAnalyzerGraph(){
   const plies = analyzerGame ? analyzerGame.plies : [];
@@ -5966,6 +6090,7 @@ function renderAnalyzerGraph(){
     if(winEnd > n){ winEnd = n; winStart = n - GRAPH_WINDOW; }
   }
   const span = winEnd - winStart || 1;
+  graphWinStart = winStart; graphWinSpan = span;
 
   // Згладжуємо по всій партії (щоб точки на межі вікна теж мали контекст
   // сусідів ззовні), а для малювання беремо лише зріз у межах вікна.
@@ -6212,7 +6337,7 @@ analyzerGraphEl.addEventListener('click', (e)=>{
   if(!analyzerGame || !analyzerGame.plies.length) return;
   const rect = analyzerGraphEl.getBoundingClientRect();
   const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  analyzerGoTo(Math.round(frac * analyzerGame.plies.length));
+  analyzerGoTo(Math.round(graphWinStart + frac * graphWinSpan));
 });
 document.addEventListener('keydown', (e)=>{
   if(currentTab !== 'analyzer' || !analyzerGame) return;
