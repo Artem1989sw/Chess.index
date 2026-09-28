@@ -130,8 +130,9 @@
   .stats-line{
     color:var(--text-muted);
     font-size:0.85rem;
-    margin-bottom:18px;
+    margin-bottom:8px;
   }
+  .backup-row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 18px;}
   .stats-line strong{color:var(--gold-soft);font-weight:600;}
 
   .layout{
@@ -306,6 +307,7 @@
     box-sizing:border-box;
   }
   .sq.last-from, .sq.last-to{box-shadow:inset 0 0 0 3px rgba(192,138,62,.55);}
+  .sq:focus-visible{outline:2px solid var(--gold-soft);outline-offset:-3px;}
   .sq.drag-hover::after{
     content:"";
     position:absolute;inset:0;
@@ -915,6 +917,11 @@
   </nav>
 
   <div class="stats-line" id="statsLine"></div>
+  <div class="backup-row">
+    <button type="button" class="diff-btn" id="exportProgressBtn" title="Зберегти весь прогрес (дебюти, тактика, ендшпілі, репертуар, налаштування, збережені партії аналізатора) в один файл">⇩ Зберегти прогрес</button>
+    <button type="button" class="diff-btn" id="importProgressBtn" title="Відновити прогрес із раніше збереженого файлу">⇧ Завантажити прогрес</button>
+    <input type="file" id="importProgressFile" accept="application/json,.json" style="display:none;">
+  </div>
 
   <main class="layout">
     <div class="item-list" id="itemList"></div>
@@ -931,7 +938,7 @@
         </div>
         <div class="board-col">
           <div class="board-wrap" id="boardWrap">
-            <div class="board" id="board"></div>
+            <div class="board" id="board" role="group" aria-label="Шахова дошка. Стрілки — рух фокусом, Enter або Пробіл — вибрати поле чи зробити хід, Escape — скасувати вибір."></div>
             <svg class="hint-arrows" id="hintArrows" viewBox="0 0 420 420" preserveAspectRatio="xMidYMid meet">
               <defs>
                 <marker id="arrowHeadGreen" viewBox="0 0 10 10" markerWidth="18" markerHeight="18" markerUnits="userSpaceOnUse" refX="0" refY="5" orient="auto">
@@ -2821,6 +2828,10 @@ let legalTargets = [];
 let lastMove = null;
 let puzzleSolved = false;
 let flipped = false;
+// Клавіатурна навігація дошкою (roving tabindex): яке поле зараз має фокус, і чи
+// "їде" воно само за останнім ходом, чи гравець узяв керування стрілками в свої руки.
+let keyboardFocusSquare = null;
+let keyboardFocusFollowsMove = true;
 let isReplaying = false;
 let replayTimers = [];
 // Окремий від replayTimers таймер відкладеного ходу суперника
@@ -4716,9 +4727,20 @@ function finishEndgamePuzzle(){
 /* ===================== ДОШКА ===================== */
 
 function renderBoard(){
+  // Клавіатурний фокус живе на самих <div>-клітинках (roving tabindex) і щорендеру
+  // перебудовується заново разом з ними — тож перш ніж стерти board, запам'ятовуємо,
+  // чи фокус зараз узагалі на дошці, щоб коректно повернути його в кінці функції.
+  const hadFocus = boardEl.contains(document.activeElement);
   boardEl.innerHTML = '';
   const board = chess.board(); // board[0] = rank8 ... board[7] = rank1
   const files = ['a','b','c','d','e','f','g','h'];
+
+  // Фокус сам "їде" за останнім ходом (своїм чи суперника), доки гравець не почне
+  // рухати його стрілками — тоді керування бере keyboardFocusFollowsMove=false в
+  // moveKeyboardFocus(), і знову вмикається щойно стається наступний реальний хід
+  // (activateSquare виставляє його назад у true).
+  if(keyboardFocusFollowsMove && lastMove) keyboardFocusSquare = lastMove.to;
+  if(!keyboardFocusSquare) keyboardFocusSquare = flipped ? 'd5' : 'd4';
 
   for(let displayRow=0; displayRow<8; displayRow++){
     for(let displayCol=0; displayCol<8; displayCol++){
@@ -4733,14 +4755,23 @@ function renderBoard(){
       const isLight = (rowIdx + colIdx) % 2 === 0;
       sqEl.className = 'sq ' + (isLight ? 'light' : 'dark');
       sqEl.dataset.square = squareName;
+      sqEl.setAttribute('role', 'button');
+      sqEl.tabIndex = squareName === keyboardFocusSquare ? 0 : -1;
 
-      if(selected === squareName) sqEl.classList.add('selected');
-      if(legalTargets.includes(squareName)){
+      const isSelected = selected === squareName;
+      const isLegal = legalTargets.includes(squareName);
+      if(isSelected) sqEl.classList.add('selected');
+      if(isLegal){
         sqEl.classList.add('legal');
         if(piece) sqEl.classList.add('has-piece');
       }
       if(lastMove && (lastMove.from === squareName)) sqEl.classList.add('last-from');
       if(lastMove && (lastMove.to === squareName)) sqEl.classList.add('last-to');
+
+      let a11yLabel = squareName + ': ' + (piece ? pieceLabelUk(piece) : 'порожньо');
+      if(isSelected) a11yLabel += ', вибрано';
+      else if(isLegal) a11yLabel += ', можна піти';
+      sqEl.setAttribute('aria-label', a11yLabel);
 
       if(piece){
         const span = document.createElement('span');
@@ -4767,6 +4798,11 @@ function renderBoard(){
       boardEl.appendChild(sqEl);
     }
   }
+
+  if(hadFocus){
+    const target = boardEl.querySelector('[data-square="' + keyboardFocusSquare + '"]');
+    if(target) target.focus({preventScroll:true});
+  }
 }
 
 function pieceGlyph(piece){
@@ -4774,6 +4810,14 @@ function pieceGlyph(piece){
   // \uFE0E — селектор текстового вигляду: без нього на iOS/Android чорний пішак ♟ малюється як кольоровий емодзі
   const blackGlyphs = {p:'♟\uFE0E',n:'♞',b:'♝',r:'♜',q:'♛',k:'♚'};
   return piece.color === 'w' ? whiteGlyphs[piece.type] : blackGlyphs[piece.type];
+}
+
+// Український опис фігури для aria-label клітинки — окремо від pieceGlyph (той керує
+// лише візуальним гліфом і не повинен знати про доступність).
+function pieceLabelUk(piece){
+  const names = {p:'пішак', n:'кінь', b:'слон', r:'тура', q:'ферзь', k:'король'};
+  const color = piece.color === 'w' ? 'білий' : 'чорний';
+  return color + ' ' + names[piece.type];
 }
 
 function renderMoveList(){
@@ -4794,37 +4838,50 @@ function setStatus(msg, kind){
 
 /* ===================== ВЗАЄМОДІЯ З ДОШКОЮ ===================== */
 
-function onSquarePointerDown(e, squareName){
-  if(isReplaying) return;
-  if(currentTab === 'reference') return; // дошка в довіднику — лише для перегляду партії, без ручних ходів
-  if(currentTab === 'analyzer' && chess.game_over()) return; // партія на дошці аналізатора скінчилась — нема чим ходити
-  if(currentTab === 'tactics' && puzzleSolved) return;
-  if(currentTab === 'cct' && cctSolved) return;
-  if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return;
-  if(currentTab === 'openings' && !freePlay && !principleMode && (!currentOpening || moveIndex >= currentOpening.moves.length)) return;
-  if(currentTab === 'openings' && chess.turn() !== userColor) return;
-  if(currentTab === 'bot' && (chess.turn() !== userColor || engineThinking || chess.game_over())) return;
+// Уся логіка "що робить клік/дотик/Enter по цій клітинці" живе тут в одному місці,
+// щоб миша (onSquarePointerDown нижче) і клавіатура (boardEl 'keydown' далі) завжди
+// поводились однаково — жодна з них не дублює перевірки вкладки/черги ходу окремо.
+// Повертає, що саме сталося: миша дивиться на це, щоб вирішити, чи починати drag
+// (лише коли щойно ВИБРАЛИ фігуру, а не коли зробили хід чи зняли вибір); клавіатура
+// значення просто ігнорує.
+function activateSquare(squareName){
+  if(isReplaying) return 'blocked';
+  if(currentTab === 'reference') return 'blocked'; // дошка в довіднику — лише для перегляду партії, без ручних ходів
+  if(currentTab === 'analyzer' && chess.game_over()) return 'blocked'; // партія на дошці аналізатора скінчилась — нема чим ходити
+  if(currentTab === 'tactics' && puzzleSolved) return 'blocked';
+  if(currentTab === 'cct' && cctSolved) return 'blocked';
+  if(currentTab === 'endgames' && currentEndgameItem && currentEndgameItem.kind === 'puzzle' && endgamePuzzleSolved) return 'blocked';
+  if(currentTab === 'openings' && !freePlay && !principleMode && (!currentOpening || moveIndex >= currentOpening.moves.length)) return 'blocked';
+  if(currentTab === 'openings' && chess.turn() !== userColor) return 'blocked';
+  if(currentTab === 'bot' && (chess.turn() !== userColor || engineThinking || chess.game_over())) return 'blocked';
 
   const piece = chess.get(squareName);
 
   if(selected){
     if(legalTargets.includes(squareName)){
+      keyboardFocusFollowsMove = true; // хід зроблено — фокус знову йде "за грою"
       attemptMove(selected, squareName);
-      return;
+      return 'moved';
     }
     if(piece && piece.color === chess.turn()){
       selectSquare(squareName);
-      beginDrag(e, squareName, piece);
-      return;
+      return 'selected';
     }
     selected = null; legalTargets = [];
     renderBoard();
-    return;
+    return 'deselected';
   }
 
   if(piece && piece.color === chess.turn()){
     selectSquare(squareName);
-    beginDrag(e, squareName, piece);
+    return 'selected';
+  }
+  return 'deselected';
+}
+
+function onSquarePointerDown(e, squareName){
+  if(activateSquare(squareName) === 'selected'){
+    beginDrag(e, squareName, chess.get(squareName));
   }
 }
 
@@ -4912,6 +4969,41 @@ document.addEventListener('pointercancel', ()=>{
   if(!dragActive) return;
   cleanupDrag();
   renderBoard();
+});
+
+// Стрілки рухають клавіатурний фокус по дошці на одну клітинку в напрямку, який
+// ВИГЛЯДАЄ як цей напрямок на екрані — тобто враховують розворот дошки (flipped),
+// а не абсолютні файл/горизонталь. row тут — той самий rowIdx, що й у renderBoard
+// (0 = 8-ма горизонталь); sign інвертує обидві осі одним прапорцем так само, як
+// renderBoard інвертує їх виразом flipped?7-x:x.
+const BOARD_FILES = 'abcdefgh';
+function moveKeyboardFocus(dCol, dRow){
+  const cur = keyboardFocusSquare || (flipped ? 'd5' : 'd4');
+  let col = BOARD_FILES.indexOf(cur[0]);
+  let row = 8 - (+cur[1]);
+  const sign = flipped ? -1 : 1;
+  col = Math.max(0, Math.min(7, col + dCol * sign));
+  row = Math.max(0, Math.min(7, row - dRow * sign));
+  keyboardFocusSquare = BOARD_FILES[col] + (8 - row);
+  keyboardFocusFollowsMove = false; // гравець узяв керування фокусом у свої руки
+  const el = boardEl.querySelector('[data-square="' + keyboardFocusSquare + '"]');
+  if(el) el.focus({preventScroll:true});
+}
+boardEl.addEventListener('keydown', (e)=>{
+  const sqEl = e.target.closest('.sq');
+  if(!sqEl) return;
+  if(e.key === 'ArrowUp'){ e.preventDefault(); moveKeyboardFocus(0, 1); }
+  else if(e.key === 'ArrowDown'){ e.preventDefault(); moveKeyboardFocus(0, -1); }
+  else if(e.key === 'ArrowLeft'){ e.preventDefault(); moveKeyboardFocus(-1, 0); }
+  else if(e.key === 'ArrowRight'){ e.preventDefault(); moveKeyboardFocus(1, 0); }
+  else if(e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar'){
+    e.preventDefault();
+    activateSquare(sqEl.dataset.square);
+  } else if(e.key === 'Escape' && selected){
+    e.preventDefault();
+    selected = null; legalTargets = [];
+    renderBoard();
+  }
 });
 
 function selectSquare(squareName){
@@ -6344,6 +6436,76 @@ document.addEventListener('keydown', (e)=>{
   if(e.target && (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT')) return;
   if(e.key === 'ArrowLeft'){ analyzerGoTo(analyzerPly - 1); }
   else if(e.key === 'ArrowRight'){ analyzerGoTo(analyzerPly + 1); }
+});
+
+/* ===================== КЛАВІАТУРНІ АКСЕЛЕРАТОРИ ДЛЯ КНОПОК =====================
+   Досвідчений гравець (Alex) очікує гарячі клавіші замість постійних кліків мишею.
+   Просто "натискаємо" ту саму кнопку, що й миша, — уся логіка валідності (чи є що
+   скасовувати, чи це взагалі поточна вкладка) лишається в одному місці, її обробнику. */
+const BUTTON_SHORTCUTS = {n:'nextBtn', h:'hintBtn', f:'flipBtn', u:'undoBtn', r:'resetBtn'};
+document.addEventListener('keydown', (e)=>{
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = e.target && e.target.tagName;
+  if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+  const btnId = BUTTON_SHORTCUTS[e.key.toLowerCase()];
+  if(!btnId) return;
+  const btn = document.getElementById(btnId);
+  if(!btn || btn.offsetParent === null) return; // кнопка прихована в поточній вкладці — нічого не робимо
+  e.preventDefault();
+  btn.click();
+});
+
+/* ===================== РЕЗЕРВНА КОПІЯ ПРОГРЕСУ =====================
+   Увесь прогрес живе лише в localStorage цього браузера — очищення даних сайту чи
+   інший пристрій означає почати спочатку. Експорт/імпорт зберігає рівно ті ключі,
+   які створює сам застосунок (усі мають префікс "chess_trainer_"), в один JSON-файл. */
+const BACKUP_KEY_PREFIX = 'chess_trainer_';
+
+function exportProgress(){
+  const data = {};
+  for(let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    if(key && key.indexOf(BACKUP_KEY_PREFIX) === 0) data[key] = localStorage.getItem(key);
+  }
+  const payload = {app:'chess-trainer', exportedAt: new Date().toISOString(), data};
+  const blob = new Blob([JSON.stringify(payload, null, 1)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'chess-trainer-progress-' + new Date().toISOString().slice(0,10) + '.json';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function importProgress(file){
+  const reader = new FileReader();
+  reader.onload = ()=>{
+    let parsed;
+    try{ parsed = JSON.parse(String(reader.result || '')); }
+    catch(e){ alert('Не вдалося прочитати файл: це не коректний JSON.'); return; }
+    const data = parsed && parsed.data;
+    if(!data || typeof data !== 'object'){ alert('Файл не схожий на резервну копію прогресу цього тренажера.'); return; }
+    const keys = Object.keys(data).filter(k => k.indexOf(BACKUP_KEY_PREFIX) === 0);
+    if(!keys.length){ alert('У файлі не знайдено даних прогресу.'); return; }
+    if(!confirm('Замінити поточний прогрес у цьому браузері вмістом файлу (' + keys.length + ' записів)? Це не можна скасувати.')) return;
+    keys.forEach(k => { try{ localStorage.setItem(k, data[k]); }catch(e){} });
+    alert('Прогрес відновлено. Сторінка зараз перезавантажиться.');
+    location.reload();
+  };
+  reader.onerror = ()=> alert('Не вдалося прочитати файл.');
+  reader.readAsText(file);
+}
+
+document.getElementById('exportProgressBtn').addEventListener('click', exportProgress);
+document.getElementById('importProgressBtn').addEventListener('click', ()=>{
+  document.getElementById('importProgressFile').click();
+});
+document.getElementById('importProgressFile').addEventListener('change', (e)=>{
+  const file = e.target.files && e.target.files[0];
+  if(file) importProgress(file);
+  e.target.value = ''; // дозволяє повторно обрати той самий файл ще раз
 });
 
 /* ===================== СТАРТ ===================== */
