@@ -7,10 +7,16 @@
 <meta name="description" content="Безкоштовний шаховий тренажер українською: дебютні лінії, тактика, ендшпілі, гра проти Stockfish та аналіз власних партій. Без реєстрації, прогрес зберігається у браузері.">
 <meta name="theme-color" content="#211C17">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%E2%99%9E%3C/text%3E%3C/svg%3E">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<!-- Шрифти, chess.js і Stockfish (у самому <script> нижче) самі захостені у vendor/ — сайт
+     повністю працює без інтернету після першого відкриття (service-worker.js кешує все нижче). -->
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="vendor/icons/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Шаховий тренажер">
+<link rel="stylesheet" href="vendor/fonts.css">
+<script src="vendor/chess.min.js"></script>
 <style>
   :root{
     --bg:#211C17;
@@ -3044,8 +3050,13 @@ let hintStep = 0; // підказка в дебютах: 0 — не просил
 // ---- Гра проти бота (Stockfish) ----
 // Stockfish 17.1 (NNUE, "lite" мережа), однопотокова wasm-збірка — без потреби
 // в SharedArrayBuffer/COOP-COEP заголовках, тому працює й при відкритті файлу напряму.
-const STOCKFISH_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.js';
-const STOCKFISH_WASM_URL = 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm';
+// Самохоститься з vendor/ (не unpkg) — файл .js читається з поточної сторінки, тож відносний
+// шлях годиться; .wasm-шлях, навпаки, підставляється в хеш blob-URL воркера (див.
+// getStockfishBlobUrl нижче) і звідти резолвиться відносно blob:-походження, а не сторінки,
+// тому мусить лишатись абсолютним — будуємо його від document.baseURI під час виконання,
+// щоб працювало однаково і на localhost, і на GitHub Pages, і будь-де ще.
+const STOCKFISH_URL = 'vendor/stockfish-17.1-lite-single-03e3232.js';
+const STOCKFISH_WASM_URL = new URL('vendor/stockfish-17.1-lite-single-03e3232.wasm', document.baseURI).href;
 const HELPER_ANALYSIS_DEPTH = 18; // на скільки півходів прораховує "чесний" рушій для оцінки й підказок
 const MIN_HINT_DEPTH = 12; // раніші (мілкі) info-рядки ще не показуємо — вони часто дають кривий хід
 // Мінімум опції UCI_Elo у Stockfish 17.1 — 1320: рівні 800/1200 просто грали б як 1320.
@@ -6727,6 +6738,16 @@ if(typeof Chess === 'undefined'){
   itemHeaderEl.innerHTML = '<p>Не вдалося завантажити бібліотеку chess.js. Перевір з\'єднання з інтернетом і онови сторінку.</p>';
 } else {
   init();
+}
+
+/* ===================== ОФЛАЙН-РЕЖИМ (SERVICE WORKER) =====================
+   Реєструємо після init(), щоб сама реєстрація нічого не затримувала при першому
+   відкритті. file:// та деякі локальні preview-сервери не підтримують service worker —
+   тиха відмова (catch) тут абсолютно нормальна, застосунок і без нього працює онлайн. */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(()=>{});
+  });
 }
 </script>
 </body>
