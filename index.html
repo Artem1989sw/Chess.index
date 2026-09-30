@@ -36,7 +36,7 @@
     --font-body:'Inter', sans-serif;
     --font-mono:'IBM Plex Mono', monospace;
     /* розмір дошки враховує поля сторінки й панелі, щоб на телефоні вона не вилазила за край */
-    --board-size:min(420px, calc(100vw - 72px));
+    --board-size:min(420px, calc(100vw - 66px));
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
@@ -48,6 +48,7 @@
     min-height:100vh;
   }
   a{color:var(--gold-soft);}
+  ::selection{background:color-mix(in srgb,var(--gold) 45%,transparent);color:var(--text);}
 
   .wrap{max-width:1080px;margin:0 auto;padding:28px 20px 60px;}
 
@@ -167,9 +168,6 @@
     .item-list .diff-filter{flex:0 0 auto;flex-wrap:nowrap;margin-bottom:0;}
     .item-list .item-list-label{flex:0 0 auto;white-space:nowrap;margin:0;}
   }
-  @media (max-width:560px){
-    .main-panel{padding:14px;}
-  }
 
   .item-btn{
     text-align:left;
@@ -232,6 +230,9 @@
     border:1px solid var(--line);
     border-radius:10px;
     padding:22px;
+  }
+  @media (max-width:560px){
+    .main-panel{padding:14px 12px 16px;}
   }
   .item-header{margin-bottom:14px;}
   .item-header .eco{
@@ -355,35 +356,103 @@
   .piece-w{color:#F7F1E3;text-shadow:0 0 1px #2A1C12,0 0 2px #2A1C12,0 1px 0 #2A1C12;}
   .piece-b{color:#241811;text-shadow:0 0 1px #F7F1E3,0 0 2px #F7F1E3;}
 
-  .info-col{flex:1 1 220px;min-width:220px;}
+  /* ===================== ПРАВА ПАНЕЛЬ: підказка-картка, ходи, керування =====================
+     Один ритм відступів (gap 14px), жодних коробок у коробках: статус і пояснення — одна картка,
+     ходи — чипи без рамки, керування — нижня панель з іконками та однією головною дією. */
+  :root{
+    --err:#D98A75;
+    /* Іконки станів — маски: колір задає --st, тож однаково працюють у темній і світлій темі */
+    --ico-dot:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='8.6'/%3E%3Ccircle cx='12' cy='12' r='2.7' fill='black'/%3E%3C/svg%3E");
+    --ico-check:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M8 12.4l2.8 2.8 5.4-5.6'/%3E%3C/svg%3E");
+    --ico-cross:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M9 9l6 6M15 9l-6 6'/%3E%3C/svg%3E");
+    --ico-alert:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.6l9.2 16H2.8z'/%3E%3Cpath d='M12 10v4.2M12 17.3v.1'/%3E%3C/svg%3E");
+    --ico-star:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3.4l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6L3.4 9.7l6-.8z'/%3E%3C/svg%3E");
+    --ico-bulb:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9.2 17.6h5.6M10 20.6h4'/%3E%3Cpath d='M12 3.4a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.4h5c0-1 .4-1.8 1.1-2.4A6 6 0 0 0 12 3.4z'/%3E%3C/svg%3E");
+  }
+  body.light-theme{--err:#A34A34;}
 
-  .status-msg{
-    font-size:0.92rem;
-    padding:10px 12px;
-    border-radius:6px;
+  .info-col{
+    flex:1 1 220px;
+    min-width:220px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    container-type:inline-size;
+    container-name:info;
+  }
+
+  /* --- Картка: статус + пояснення до ходу --- */
+  .coach{
     background:var(--panel-2);
     border:1px solid var(--line);
-    margin-bottom:12px;
-    min-height:20px;
+    border-radius:14px;
+    overflow:hidden;
   }
-  .status-msg.ok{border-color:var(--olive);color:var(--olive);}
-  .status-msg.err{border-color:var(--clay);color:#D98A75;}
-  .status-msg.win{border-color:var(--gold);color:var(--gold-soft);}
-  .status-msg.warn{border-color:var(--gold);color:var(--text);}
+  .status-msg{
+    --st:var(--gold-soft);
+    --st-icon:var(--ico-dot);
+    display:flex;
+    align-items:flex-start;
+    gap:10px;
+    min-height:48px;
+    padding:13px 14px;
+    font-size:0.98rem;
+    font-weight:600;
+    line-height:1.35;
+    color:var(--text);
+  }
+  .status-msg::before{
+    content:"";
+    flex:0 0 auto;
+    width:20px;height:20px;
+    margin-top:1px;
+    background:var(--st);
+    -webkit-mask:var(--st-icon) center/contain no-repeat;
+            mask:var(--st-icon) center/contain no-repeat;
+  }
+  .status-msg.is-new::before{animation:icoPop .34s cubic-bezier(.16,1,.3,1);}
+  @keyframes icoPop{from{transform:scale(.5) rotate(-12deg);opacity:.25;}to{transform:none;opacity:1;}}
+  .status-msg.ok{--st:var(--olive);--st-icon:var(--ico-check);background:color-mix(in srgb,var(--olive) 15%,transparent);}
+  .status-msg.err{--st:var(--err);--st-icon:var(--ico-cross);background:color-mix(in srgb,var(--clay) 18%,transparent);}
+  .status-msg.win{--st:var(--gold-soft);--st-icon:var(--ico-star);background:color-mix(in srgb,var(--gold) 18%,transparent);}
+  .status-msg.warn{--st:var(--gold-soft);--st-icon:var(--ico-alert);background:color-mix(in srgb,var(--gold) 12%,transparent);}
 
+  .move-comment{
+    margin:0;
+    padding:12px 14px 14px 44px; /* 14 + 20 (іконка) + 10 — текст стає в одну колонку зі статусом */
+    border-top:1px solid var(--line);
+    font-size:0.9rem;
+    line-height:1.55;
+    color:var(--text);
+  }
+
+  /* --- Ходи: номер + два ходи, останній — акцентом --- */
   .move-list{
+    position:relative;
+    display:flex;
+    flex:1 1 auto;
+    flex-wrap:wrap;
+    align-content:flex-start;
+    gap:6px 12px;
+    min-height:28px;
+    max-height:7.6rem;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    scrollbar-width:thin;
+    scrollbar-color:var(--line) transparent;
     font-family:var(--font-mono);
     font-size:0.82rem;
     color:var(--text-muted);
-    background:var(--panel-2);
-    border:1px solid var(--line);
-    border-radius:6px;
-    padding:10px 12px;
-    min-height:46px;
-    margin-bottom:12px;
-    word-break:break-word;
   }
+  .move-list.is-empty{font-family:var(--font-body);font-size:0.85rem;font-style:italic;padding:4px 2px;}
+  .mv-pair{display:inline-flex;align-items:center;gap:2px;}
+  .mv-no{margin-right:4px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
+  .mv{padding:3px 7px;border-radius:7px;color:var(--text);line-height:1.2;}
+  .mv.is-last{background:var(--gold);color:#241811;font-weight:600;animation:mvIn .24s cubic-bezier(.16,1,.3,1);}
+  @keyframes mvIn{from{transform:scale(.84);opacity:.35;}to{transform:none;opacity:1;}}
+  @media (min-width:1010px){ .move-list{max-height:16rem;} }
 
+  /* --- Кнопки --- */
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
   .btn{
     appearance:none;
@@ -394,40 +463,158 @@
     font-weight:600;
     font-size:0.85rem;
     padding:8px 14px;
-    border-radius:6px;
+    border-radius:8px;
     cursor:pointer;
-    transition:border-color .15s ease, color .15s ease;
+    transition:border-color .15s ease, color .15s ease, background .15s ease, transform .12s ease;
   }
   .btn:hover{border-color:var(--gold);color:var(--gold-soft);}
+  .btn:active{transform:translateY(1px);}
   .btn:focus-visible{outline:2px solid var(--gold-soft);outline-offset:2px;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
   .btn.primary{background:var(--gold);border-color:var(--gold);color:#241811;}
   .btn.primary:hover{background:var(--gold-soft);color:#241811;}
 
+  /* Панель керування: 2x2 велике поле натискання з іконкою + підписом і одна головна дія */
+  .action-bar{gap:8px;margin-top:auto;}
+  .action-bar .tool{
+    position:relative;
+    flex:1 1 calc(50% - 4px);
+    min-width:0;
+    min-height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:8px;
+    padding:0 10px;
+    border-radius:12px;
+    color:var(--text);
+    font-size:0.86rem;
+    line-height:1.1;
+  }
+  .tool svg,.next-btn svg{
+    flex:0 0 auto;
+    width:22px;height:22px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:1.9;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+  }
+  .action-bar .tool svg{color:var(--text-muted);transition:color .15s ease;}
+  .action-bar .tool span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .action-bar .tool:hover{color:var(--gold-soft);border-color:var(--gold);background:var(--panel);}
+  .action-bar .tool:hover svg{color:var(--gold-soft);}
+  .action-bar .next-btn{
+    flex:1 0 100%;
+    position:relative;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    min-height:54px;
+    border-radius:14px;
+    font-size:1.02rem;
+    font-weight:700;
+    letter-spacing:0.01em;
+    box-shadow:0 8px 18px -8px rgba(0,0,0,.6);
+  }
+  .next-btn svg{width:20px;height:20px;stroke-width:2.2;transition:transform .2s cubic-bezier(.16,1,.3,1);}
+  .action-bar .next-btn:hover svg{transform:translateX(4px);}
+  /* Підказки гарячих клавіш (N/H/F/U/R) — лише там, де є фізична клавіатура */
+  @media (hover:hover) and (pointer:fine){
+    .action-bar [data-key]::after{
+      content:attr(data-key);
+      position:absolute;
+      top:3px;right:5px;
+      padding:2px 4px;
+      border:1px solid var(--line);
+      border-radius:4px;
+      font:600 0.56rem/1 var(--font-mono);
+      color:var(--text-muted);
+      opacity:.8;
+    }
+    .action-bar .next-btn[data-key]::after{
+      top:50%;right:16px;
+      transform:translateY(-50%);
+      padding:3px 5px;
+      border-color:rgba(36,24,17,.4);
+      color:#241811;
+      opacity:.65;
+    }
+  }
+  /* Широка колонка (планшет, дошка над панеллю): усі чотири дії в один ряд */
+  @container info (min-width:620px){
+    .action-bar .tool{flex:1 1 0;}
+  }
+  /* Дуже вузька колонка (бот із шкалою оцінки): лишаємо іконки, підписи — для скрінрідерів */
+  @container info (max-width:259px){
+    .action-bar .tool{flex:1 1 0;justify-content:center;padding:0;min-height:50px;}
+    .action-bar .tool span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;}
+    .action-bar [data-key]::after{display:none;}
+  }
+  /* Навігація аналізатора: п'ять однакових іконок-кнопок, як у програвача */
+  .nav-bar{gap:8px;}
+  .nav-bar .btn{
+    flex:1 1 0;
+    min-width:0;
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:12px;
+    padding:0;
+    color:var(--text-muted);
+  }
+  .nav-bar .btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .nav-bar .btn:hover{background:var(--panel);}
+
+  /* --- Другорядні великі кнопки колонки --- */
+  #freePlayBox,#analysisBtnBox{margin:0;}
+  #freePlayBox .btn,#analysisBtnBox .btn{
+    width:100%;
+    min-height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    border-radius:12px;
+    font-size:0.92rem;
+  }
+  #analysisBtnBox .btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+
+  /* --- Підказка та пояснення: спокійні тонові блоки, без кольорових смужок збоку --- */
   .hint-text{
     font-size:0.85rem;
     color:var(--text-muted);
     margin-top:8px;
     font-style:italic;
   }
-
-  .explain{
+  .info-col .hint-text,
+  .info-col .explain{
+    position:relative;
+    margin:0;
+    border-radius:12px;
     font-size:0.9rem;
+    font-style:normal;
+    line-height:1.55;
     color:var(--text);
-    background:var(--panel-2);
-    border-left:3px solid var(--gold);
-    padding:10px 12px;
-    border-radius:0 6px 6px 0;
-    margin-top:12px;
   }
-
-  .move-comment{
-    font-size:0.85rem;
-    color:var(--text);
-    background:var(--panel-2);
-    border-left:3px solid var(--olive);
-    padding:8px 12px;
-    border-radius:0 6px 6px 0;
-    margin-top:10px;
+  .info-col .hint-text{
+    padding:12px 14px 12px 44px;
+    background:color-mix(in srgb,var(--gold) 13%,var(--panel-2));
+  }
+  .info-col .hint-text::before{
+    content:"";
+    position:absolute;
+    left:14px;top:13px;
+    width:20px;height:20px;
+    background:var(--gold-soft);
+    -webkit-mask:var(--ico-bulb) center/contain no-repeat;
+            mask:var(--ico-bulb) center/contain no-repeat;
+  }
+  .info-col .explain{
+    padding:13px 14px;
+    background:color-mix(in srgb,var(--olive) 12%,var(--panel-2));
   }
 
   .theory{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);}
@@ -673,8 +860,6 @@
   #openReferenceBtn{margin-left:8px;}
   .ref-note{font-size:0.82rem;color:var(--text-muted);font-style:italic;margin:0 0 12px;max-width:74ch;}
   #returnTrainBtn{margin-top:12px;}
-  #freePlayBox{margin:4px 0 12px;}
-  #freePlayBox .btn{width:100%;}
   .engine-thinking{opacity:.7;font-style:italic;}
 
   /* ---- Рівні складності задач ---- */
@@ -741,9 +926,11 @@
   .eval-bar-fill{position:absolute;left:0;bottom:0;width:100%;background:#F7F1E3;transition:height .35s ease;}
   .eval-bar-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--text-muted);}
   .engine-status{font-size:0.8rem;color:var(--text-muted);margin-bottom:10px;}
+  .engine-status::before{content:"";display:inline-block;width:7px;height:7px;margin-right:7px;border-radius:50%;background:currentColor;vertical-align:middle;}
   .engine-status.ok{color:var(--olive);}
   .engine-status.err{color:#D98A75;}
-  .hint-toggle{display:flex;align-items:center;gap:6px;font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;cursor:pointer;}
+  .hint-toggle{display:flex;align-items:center;gap:8px;min-height:36px;font-size:0.85rem;color:var(--text-muted);margin-bottom:10px;cursor:pointer;}
+  .hint-toggle input{width:18px;height:18px;accent-color:var(--gold);}
   .engine-lines{display:none;margin-bottom:12px;}
   .engine-line{font-family:var(--font-mono);font-size:0.8rem;color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:6px 10px;margin-bottom:6px;}
   .engine-line-eval{color:var(--gold-soft);font-weight:600;margin-right:8px;}
@@ -805,6 +992,8 @@
   .move-strip{
     display:flex;
     gap:4px;
+    scrollbar-width:thin;
+    scrollbar-color:var(--line) transparent;
     overflow-x:auto;
     padding:4px 2px 0;
     flex:1 1 auto;
@@ -897,6 +1086,7 @@
 
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
+    .status-msg.is-new::before,.mv.is-last{animation:none !important;}
   }
 </style>
 </head>
@@ -961,15 +1151,17 @@
           </div>
         </div>
         <div class="info-col">
-          <div class="status-msg" id="statusMsg" role="status" aria-live="polite">Обери пункт зі списку зліва.</div>
-          <div class="move-list" id="moveList"></div>
-          <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
+          <div class="coach">
+            <div class="status-msg" id="statusMsg" role="status" aria-live="polite">Обери пункт зі списку зліва.</div>
+            <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
+          </div>
+          <div class="move-list is-empty" id="moveList" role="group" aria-label="Зіграні ходи"></div>
           <div id="principleMoveStrip" class="move-strip" style="display:none;"></div>
           <div id="freePlayBox" style="display:none;">
             <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
           </div>
-          <div id="analysisBtnBox" style="display:none;margin:4px 0 12px;">
-            <button class="btn" id="analysisBtn" style="width:100%;">📊 Показати аналіз ходів</button>
+          <div id="analysisBtnBox" style="display:none;">
+            <button class="btn" id="analysisBtn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V11M10 20V4M16 20v-6M21 20H3"/></svg>Показати аналіз ходів</button>
           </div>
           <div id="botBox" style="display:none;">
             <div class="engine-status" id="engineStatusLine"></div>
@@ -985,20 +1177,20 @@
             <svg id="analyzerGraph" class="eval-graph" viewBox="0 0 600 130" preserveAspectRatio="none"></svg>
             <div id="analyzerDetail" class="analyzer-detail"></div>
             <div id="analyzerSummary" class="analyzer-summary"></div>
-            <div class="btn-row" id="analyzerNavRow" style="display:none;">
-              <button class="btn" id="analyzerFirstBtn" title="До початку партії">« Початок</button>
-              <button class="btn" id="analyzerPrevBtn" title="Попередній хід">‹ Назад</button>
-              <button class="btn" id="analyzerNextBtn" title="Наступний хід">Вперед ›</button>
-              <button class="btn" id="analyzerLastBtn" title="До кінця партії">Кінець »</button>
-              <button class="btn" id="analyzerFlipBtn" title="Подивитись на дошку з іншого боку">⇅ Розвернути</button>
+            <div class="btn-row nav-bar" id="analyzerNavRow" style="display:none;" role="toolbar" aria-label="Навігація партією">
+              <button class="btn" id="analyzerFirstBtn" type="button" title="До початку партії" aria-label="До початку партії"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13"/><path d="M18 6.2 9.5 12l8.5 5.8z"/></svg></button>
+              <button class="btn" id="analyzerPrevBtn" type="button" title="Попередній хід" aria-label="Попередній хід"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+              <button class="btn" id="analyzerNextBtn" type="button" title="Наступний хід" aria-label="Наступний хід"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
+              <button class="btn" id="analyzerLastBtn" type="button" title="До кінця партії" aria-label="До кінця партії"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5.5v13"/><path d="M6 6.2 14.5 12 6 17.8z"/></svg></button>
+              <button class="btn" id="analyzerFlipBtn" type="button" title="Розвернути дошку" aria-label="Розвернути дошку"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v14"/><path d="m3.6 14.6 3.4 3.4 3.4-3.4"/><path d="M17 20V6"/><path d="m13.6 9.4 3.4-3.4 3.4 3.4"/></svg></button>
             </div>
           </div>
-          <div class="btn-row" id="mainBtnRow">
-            <button class="btn" id="resetBtn">Почати заново</button>
-            <button class="btn" id="undoBtn">Скасувати хід</button>
-            <button class="btn" id="flipBtn" title="Подивитись на дошку з іншого боку">⇅ Розвернути</button>
-            <button class="btn" id="hintBtn">Підказка</button>
-            <button class="btn primary" id="nextBtn">Далі →</button>
+          <div class="btn-row action-bar" id="mainBtnRow" role="toolbar" aria-label="Керування тренуванням">
+            <button class="btn tool" id="undoBtn" type="button" title="Скасувати хід (U)" data-key="U" aria-keyshortcuts="U"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><span>Скасувати</span></button>
+            <button class="btn tool" id="hintBtn" type="button" title="Підказка (H)" data-key="H" aria-keyshortcuts="H"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.2 17.6h5.6M10 20.6h4"/><path d="M12 3.4a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.4h5c0-1 .4-1.8 1.1-2.4A6 6 0 0 0 12 3.4z"/></svg><span>Підказка</span></button>
+            <button class="btn tool" id="flipBtn" type="button" title="Розвернути дошку (F)" data-key="F" aria-keyshortcuts="F"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4v14"/><path d="m3.6 14.6 3.4 3.4 3.4-3.4"/><path d="M17 20V6"/><path d="m13.6 9.4 3.4-3.4 3.4 3.4"/></svg><span>Розвернути</span></button>
+            <button class="btn tool" id="resetBtn" type="button" title="Почати заново (R)" data-key="R" aria-keyshortcuts="R"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12a8.5 8.5 0 1 0 2.7-6.2"/><path d="M3.5 4.5v4.6h4.6"/></svg><span>Заново</span></button>
+            <button class="btn primary next-btn" id="nextBtn" type="button" title="Далі (N)" data-key="N" aria-keyshortcuts="N"><span>Далі</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button>
           </div>
           <div id="hintBox" class="hint-text" style="display:none;"></div>
           <div id="explainBox" class="explain" style="display:none;"></div>
@@ -5108,20 +5300,51 @@ function pieceLabelUk(piece){
   return color + ' ' + names[piece.type];
 }
 
+// Малює список ходів чипами: "1." + два ходи в парі, активний хід — акцентом.
+// items — [{no, san}], activeIdx — індекс виділеного напівходу (-1 — без виділення).
+function fillMoveList(items, activeIdx){
+  moveListEl.classList.toggle('is-empty', items.length === 0);
+  if(items.length === 0){ moveListEl.textContent = 'Ходів ще не було.'; return; }
+  const frag = document.createDocumentFragment();
+  for(let i=0;i<items.length;i+=2){
+    const pair = document.createElement('span');
+    pair.className = 'mv-pair';
+    const no = document.createElement('span');
+    no.className = 'mv-no';
+    no.textContent = items[i].no + '.';
+    pair.appendChild(no);
+    for(let j=i;j<Math.min(i+2, items.length);j++){
+      const mv = document.createElement('span');
+      mv.className = 'mv' + (j === activeIdx ? ' is-last' : '');
+      mv.textContent = items[j].san;
+      pair.appendChild(mv);
+    }
+    frag.appendChild(pair);
+  }
+  moveListEl.replaceChildren(frag);
+  // Прокручуємо лише сам список (не сторінку), щоб активний хід лишався видимим.
+  const act = moveListEl.querySelector('.is-last');
+  if(act){
+    const top = act.offsetTop, bottom = top + act.offsetHeight;
+    if(bottom > moveListEl.scrollTop + moveListEl.clientHeight) moveListEl.scrollTop = bottom - moveListEl.clientHeight + 4;
+    else if(top < moveListEl.scrollTop) moveListEl.scrollTop = Math.max(0, top - 4);
+  } else {
+    moveListEl.scrollTop = moveListEl.scrollHeight;
+  }
+}
+
 function renderMoveList(){
   const history = chess.history();
-  if(history.length === 0){ moveListEl.textContent = 'Ходів ще не було.'; return; }
-  let out = '';
-  for(let i=0;i<history.length;i+=2){
-    const num = i/2 + 1;
-    out += num + '. ' + history[i] + (history[i+1] ? ' ' + history[i+1] + '  ' : '');
-  }
-  moveListEl.textContent = out.trim();
+  fillMoveList(history.map((san, i)=>({no: Math.floor(i/2) + 1, san})), history.length - 1);
 }
 
 function setStatus(msg, kind){
   statusEl.textContent = msg;
   statusEl.className = 'status-msg' + (kind ? ' ' + kind : '');
+  // Короткий "поп" іконки на кожне нове повідомлення — зміну стану видно, навіть якщо текст схожий.
+  statusEl.classList.remove('is-new');
+  void statusEl.offsetWidth;
+  statusEl.classList.add('is-new');
 }
 
 /* ===================== ВЗАЄМОДІЯ З ДОШКОЮ ===================== */
@@ -6649,13 +6872,11 @@ function renderAnalyzerMoveListText(){
   // chess тут завжди побудований напряму з FEN якогось проміжного ходу
   // (не з початкової позиції через .move()), тож chess.history() порожня —
   // повний запис партії тримаємо окремо, в analyzerGame.plies.
-  if(!analyzerGame){ moveListEl.textContent = 'Ходів ще не було.'; return; }
+  if(!analyzerGame){ fillMoveList([], -1); return; }
   const plies = analyzerGame.plies;
-  let out = '';
-  for(let i=0;i<plies.length;i+=2){
-    out += plies[i].moveNo + '. ' + plies[i].san + (plies[i+1] ? ' ' + plies[i+1].san + '  ' : '');
-  }
-  moveListEl.textContent = out.trim();
+  // Виділяємо хід, після якого зараз стоїть дошка (або місце, звідки відгалужено варіант).
+  const activeIdx = (analyzerBranch ? analyzerBranch.fromPly : analyzerPly) - 1;
+  fillMoveList(plies.map(p=>({no: p.moveNo, san: p.san})), activeIdx);
 }
 
 function renderAnalyzerView(){
