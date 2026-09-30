@@ -448,9 +448,93 @@
   .mv-pair{display:inline-flex;align-items:center;gap:2px;}
   .mv-no{margin-right:4px;color:var(--text-muted);font-variant-numeric:tabular-nums;}
   .mv{padding:3px 7px;border-radius:7px;color:var(--text);line-height:1.2;}
-  .mv.is-last{background:var(--gold);color:#241811;font-weight:600;animation:mvIn .24s cubic-bezier(.16,1,.3,1);}
+  button.mv{appearance:none;border:0;background:transparent;font:inherit;cursor:pointer;}
+  button.mv:hover{background:color-mix(in srgb,var(--gold) 22%,transparent);}
+  button.mv:focus-visible{outline:2px solid var(--gold-soft);outline-offset:1px;}
+  .mv.is-current,button.mv.is-current:hover{background:var(--gold);color:#241811;font-weight:600;}
+  .mv.is-current{animation:mvIn .24s cubic-bezier(.16,1,.3,1);}
   @keyframes mvIn{from{transform:scale(.84);opacity:.35;}to{transform:none;opacity:1;}}
   @media (min-width:1010px){ .move-list{max-height:16rem;} }
+
+  /* --- Перегляд ходів: банер «До гри», кнопки ‹ ›, підпис позиції --- */
+  .review-banner{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    align-items:center;
+    gap:8px 10px;
+    padding:8px 8px 8px 14px;
+    border-radius:14px;
+    background:color-mix(in srgb,var(--gold) 16%,var(--panel-2));
+    border:1px solid color-mix(in srgb,var(--gold) 50%,var(--line));
+    font-size:0.9rem;
+    font-weight:600;
+    line-height:1.3;
+    color:var(--text);
+  }
+  .review-banner[hidden],.review-nav[hidden]{display:none;}
+  .review-banner-text{min-width:0;}
+  .review-banner-text .nowrap{white-space:nowrap;}
+  .review-banner-note{
+    grid-column:1 / -1;
+    padding:0 6px 6px 0;
+    font-size:0.86rem;
+    font-weight:400;
+    line-height:1.5;
+    color:var(--text);
+  }
+  .review-banner-note[hidden]{display:none;}
+  .info-col.is-reviewing .move-comment{display:none !important;} /* пояснення до живого ходу під час перегляду не потрібне */
+  .review-banner .review-return{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    min-height:40px;
+    padding:0 14px;
+    border-radius:10px;
+    font-size:0.88rem;
+  }
+  .review-return svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+  @keyframes nudge{0%,100%{transform:none;}20%{transform:translateX(-5px);}45%{transform:translateX(5px);}70%{transform:translateX(-3px);}}
+  .review-banner.nudge{animation:nudge .38s cubic-bezier(.16,1,.3,1);}
+  .review-nav{
+    display:grid;
+    grid-template-columns:44px 44px minmax(0,1fr) 44px 44px;
+    gap:6px;
+    align-items:stretch;
+  }
+  .review-nav .btn{
+    min-height:42px;
+    padding:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:12px;
+    color:var(--text-muted);
+  }
+  .review-nav .btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+  .review-nav .btn:hover:not(:disabled){background:var(--panel);}
+  .review-pos{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-width:0;
+    padding:0 8px;
+    border-radius:12px;
+    font:600 0.84rem/1 var(--font-mono);
+    color:var(--text-muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .info-col.is-reviewing .review-pos{background:var(--gold);color:#241811;}
+  .info-col .coach{transition:opacity .2s ease;}
+  .info-col.is-reviewing .coach{opacity:.55;}
+  .board-wrap.is-review .board{border-color:var(--gold);}
+  .board-wrap.is-review .sq,.board-wrap.is-review .piece{cursor:default;}
+  .eval-col.is-stale{opacity:.35;}
+  .move-chip{outline-offset:2px;}
+  .move-chip:focus-visible{outline:2px solid var(--gold-soft);}
 
   /* --- Кнопки --- */
   .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
@@ -1077,6 +1161,10 @@
 
   /* Сенсорні екрани: цілі натискання не менші за ~40px */
   @media (pointer:coarse){
+    .mv{padding:8px 10px;}
+    .move-list{gap:2px 10px;}
+    .review-nav{grid-template-columns:46px 46px minmax(0,1fr) 46px 46px;}
+    .review-nav .btn{min-height:46px;}
     .diff-btn{padding:9px 13px;}
     .rep-star{width:40px;}
     .btn{padding:11px 14px;}
@@ -1086,7 +1174,7 @@
 
   @media (prefers-reduced-motion: reduce){
     *{transition:none !important;}
-    .status-msg.is-new::before,.mv.is-last{animation:none !important;}
+    .status-msg.is-new::before,.mv.is-current,.review-banner.nudge{animation:none !important;}
   }
 </style>
 </head>
@@ -1151,11 +1239,23 @@
           </div>
         </div>
         <div class="info-col">
+          <div class="review-banner" id="reviewBanner" role="status" hidden>
+            <span class="review-banner-text" id="reviewBannerText"></span>
+            <button type="button" class="btn primary review-return" id="reviewLiveBtn" title="Повернутися до гри"><span>До гри</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 4v7a4 4 0 0 1-4 4H4"/><path d="m9 10-5 5 5 5"/></svg></button>
+            <span class="review-banner-note" id="reviewBannerNote" hidden></span>
+          </div>
           <div class="coach">
             <div class="status-msg" id="statusMsg" role="status" aria-live="polite">Обери пункт зі списку зліва.</div>
             <div id="moveCommentBox" class="move-comment" style="display:none;"></div>
           </div>
-          <div class="move-list is-empty" id="moveList" role="group" aria-label="Зіграні ходи"></div>
+          <div class="review-nav" id="reviewNav" role="toolbar" aria-label="Перегляд ходів партії" hidden>
+            <button type="button" class="btn" id="reviewFirstBtn" title="На початок партії" aria-label="На початок партії"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5.5v13"/><path d="M18 6.2 9.5 12l8.5 5.8z"/></svg></button>
+            <button type="button" class="btn" id="reviewPrevBtn" title="Хід назад (←)" aria-label="Хід назад"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 6-6 6 6 6"/></svg></button>
+            <span class="review-pos" id="reviewPos" aria-live="polite"></span>
+            <button type="button" class="btn" id="reviewNextBtn" title="Хід уперед (→)" aria-label="Хід уперед"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.5 6 6 6-6 6"/></svg></button>
+            <button type="button" class="btn" id="reviewLastBtn" title="До поточної позиції гри" aria-label="До поточної позиції гри"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5.5v13"/><path d="M6 6.2 14.5 12 6 17.8z"/></svg></button>
+          </div>
+          <div class="move-list is-empty" id="moveList" role="group" aria-label="Зіграні ходи. Натисни хід, щоб побачити позицію після нього"></div>
           <div id="principleMoveStrip" class="move-strip" style="display:none;"></div>
           <div id="freePlayBox" style="display:none;">
             <button class="btn primary" id="playVsEngineBtn">Грати без перевірки принципів</button>
@@ -3499,6 +3599,27 @@ const analyzerNavRowEl = document.getElementById('analyzerNavRow');
 const boardBadgeEl = document.getElementById('boardBadge');
 const boardAreaEl = document.getElementById('boardArea');
 const referenceArticleEl = document.getElementById('referenceArticle');
+const infoColEl = document.querySelector('.info-col');
+const boardWrapEl = document.getElementById('boardWrap');
+const reviewBannerEl = document.getElementById('reviewBanner');
+const reviewBannerTextEl = document.getElementById('reviewBannerText');
+const reviewBannerNoteEl = document.getElementById('reviewBannerNote');
+const reviewLiveBtn = document.getElementById('reviewLiveBtn');
+const reviewNavEl = document.getElementById('reviewNav');
+const reviewPosEl = document.getElementById('reviewPos');
+const reviewFirstBtn = document.getElementById('reviewFirstBtn');
+const reviewPrevBtn = document.getElementById('reviewPrevBtn');
+const reviewNextBtn = document.getElementById('reviewNextBtn');
+const reviewLastBtn = document.getElementById('reviewLastBtn');
+
+// ---- Перегляд ходів під час гри ----
+// Гравець може повернутися на будь-який зіграний хід, подивитись позицію й повернутися до гри.
+// Сама партія (chess) при цьому не змінюється — лише те, що малюється на дошці.
+let reviewPly = null;   // null — на дошці жива позиція; число k — позиція після k-го напівходу (0 — початкова)
+let reviewOwner = null; // Chess-об'єкт, для якого діє перегляд: нова партія (новий об'єкт) сама його скидає
+let plyFens = [];       // plyFens[k] — FEN після k напівходів живої партії
+let plyMoves = [];      // ходи живої партії (verbose) — звідси підсвітка останнього ходу під час перегляду
+let plyOwner = null;    // для якого об'єкта партії порахований кеш вище
 
 // Спільний "скид" бічних панелей при перемиканні пункту/вкладки — раніше
 // кожна select*-функція ховала ці ж п'ять елементів окремими рядками.
@@ -3573,6 +3694,7 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
     else if(currentTab === 'analyzer'){ selectAnalyzer(); }
     else if(currentTab === 'reference'){ selectReference(REFERENCE[0].id); }
     else { selectPuzzle(PUZZLES[0].id); }
+    syncReviewUI();
   });
 });
 
@@ -3588,6 +3710,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
 });
 document.getElementById('undoBtn').addEventListener('click', ()=>{
   if(isReplaying) return;
+  exitReview(); // скасування стосується живої гри — спершу повертаємось до неї
   if(dragActive){ cleanupDrag(); }
   const undone = chess.undo();
   if(!undone) return;
@@ -3672,6 +3795,7 @@ document.getElementById('nextBtn').addEventListener('click', ()=>{
   }
 });
 document.getElementById('hintBtn').addEventListener('click', ()=>{
+  exitReview(); // підказка стосується живої позиції
   // Дебюти: підказка стосується САМЕ наступного ходу лінії (раніше тут показувався
   // порожній блок або текст останньої розв'язаної задачі). Спершу — лише поле, з якого
   // ходити; другим натисканням — сам хід зі стрілкою.
@@ -4752,11 +4876,13 @@ function renderPrincipleMoveStrip(){
   if(!principleMoveLog.length){ principleMoveStripEl.style.display = 'none'; return; }
   principleMoveStripEl.style.display = 'flex';
   principleMoveStripEl.innerHTML = principleMoveLog.map(m=>{
+    // Номер напівходу в партії — щоб клік на бейдж показав позицію після цього ходу.
+    const ply = (m.moveNo - 1) * 2 + (m.color === 'w' ? 1 : 2);
     if(!m.cls){
-      return `<span class="move-chip" title="Рушій ще оцінює…">${m.san}<span class="chip-icon" style="background:var(--text-muted)">⏳</span></span>`;
+      return `<span class="move-chip" role="button" tabindex="0" data-ply="${ply}" title="Рушій ще оцінює… Натисни, щоб побачити позицію після ходу">${m.san}<span class="chip-icon" style="background:var(--text-muted)">⏳</span></span>`;
     }
     const meta = MOVE_QUALITY_META[m.cls];
-    return `<span class="move-chip" title="${meta.label}${m.bestSan ? ' — краще було ' + m.bestSan : ''}">${m.moveNo}. ${m.san}<span class="chip-icon" style="background:${meta.color}">${meta.icon}</span></span>`;
+    return `<span class="move-chip" role="button" tabindex="0" data-ply="${ply}" title="${meta.label}${m.bestSan ? ' — краще було ' + m.bestSan : ''}. Натисни, щоб побачити позицію після ходу">${m.moveNo}. ${m.san}<span class="chip-icon" style="background:${meta.color}">${meta.icon}</span></span>`;
   }).join('');
   const last = principleMoveStripEl.lastElementChild;
   if(last) last.scrollIntoView({block:'nearest', inline:'end'});
@@ -4963,6 +5089,7 @@ function startLineReplay(op, line, kind, comments){
       if(comments){ showMoveComment(op, i); }
       if(i === moves.length - 1){
         isReplaying = false;
+        renderMoveList(); // після автопоказу ходи знову клікабельні, кнопки перегляду з'являються
         const finishMsg = kind === 'trap' ? 'Ось так спрацьовує пастка.' : kind === 'variation' ? 'Ось так може розвиватися ця лінія.' : kind === 'game' ? 'Дебютна стадія партії відтворена — далі гра тривала за сценарієм, описаним у статті.' : 'Ось так виглядає основна лінія. Тепер спробуй пройти її сам!';
         setStatus(finishMsg, 'win');
         if(!comments){
@@ -5211,15 +5338,19 @@ function renderBoard(){
   // перебудовується заново разом з ними — тож перш ніж стерти board, запам'ятовуємо,
   // чи фокус зараз узагалі на дошці, щоб коректно повернути його в кінці функції.
   const hadFocus = boardEl.contains(document.activeElement);
+  // Перегляд діє лише для тієї самої партії й лише там, де він доступний; інакше скидаємо.
+  if(reviewPly !== null && (reviewOwner !== chess || !reviewAvailable() || !plyFens[reviewPly] || reviewPly >= plyFens.length - 1)) reviewPly = null;
+  const reviewing = reviewPly !== null;
+  const shownLast = reviewing ? (reviewPly > 0 ? plyMoves[reviewPly - 1] : null) : lastMove;
   boardEl.innerHTML = '';
-  const board = chess.board(); // board[0] = rank8 ... board[7] = rank1
+  const board = (reviewing ? new Chess(plyFens[reviewPly]) : chess).board(); // board[0] = rank8 ... board[7] = rank1
   const files = ['a','b','c','d','e','f','g','h'];
 
   // Фокус сам "їде" за останнім ходом (своїм чи суперника), доки гравець не почне
   // рухати його стрілками — тоді керування бере keyboardFocusFollowsMove=false в
   // moveKeyboardFocus(), і знову вмикається щойно стається наступний реальний хід
   // (activateSquare виставляє його назад у true).
-  if(keyboardFocusFollowsMove && lastMove) keyboardFocusSquare = lastMove.to;
+  if(keyboardFocusFollowsMove && shownLast) keyboardFocusSquare = shownLast.to;
   if(!keyboardFocusSquare) keyboardFocusSquare = flipped ? 'd5' : 'd4';
 
   for(let displayRow=0; displayRow<8; displayRow++){
@@ -5238,15 +5369,15 @@ function renderBoard(){
       sqEl.setAttribute('role', 'button');
       sqEl.tabIndex = squareName === keyboardFocusSquare ? 0 : -1;
 
-      const isSelected = selected === squareName;
-      const isLegal = legalTargets.includes(squareName);
+      const isSelected = !reviewing && selected === squareName;
+      const isLegal = !reviewing && legalTargets.includes(squareName);
       if(isSelected) sqEl.classList.add('selected');
       if(isLegal){
         sqEl.classList.add('legal');
         if(piece) sqEl.classList.add('has-piece');
       }
-      if(lastMove && (lastMove.from === squareName)) sqEl.classList.add('last-from');
-      if(lastMove && (lastMove.to === squareName)) sqEl.classList.add('last-to');
+      if(shownLast && (shownLast.from === squareName)) sqEl.classList.add('last-from');
+      if(shownLast && (shownLast.to === squareName)) sqEl.classList.add('last-to');
 
       let a11yLabel = squareName + ': ' + (piece ? pieceLabelUk(piece) : 'порожньо');
       if(isSelected) a11yLabel += ', вибрано';
@@ -5283,6 +5414,7 @@ function renderBoard(){
     const target = boardEl.querySelector('[data-square="' + keyboardFocusSquare + '"]');
     if(target) target.focus({preventScroll:true});
   }
+  boardWrapEl.classList.toggle('is-review', reviewing);
 }
 
 function pieceGlyph(piece){
@@ -5301,29 +5433,45 @@ function pieceLabelUk(piece){
 }
 
 // Малює список ходів чипами: "1." + два ходи в парі, активний хід — акцентом.
-// items — [{no, san}], activeIdx — індекс виділеного напівходу (-1 — без виділення).
-function fillMoveList(items, activeIdx){
+// items — [{no, san, color?}], activeIdx — індекс виділеного напівходу (-1 — без виділення),
+// onPick(i) — якщо задано, кожен хід стає кнопкою "покажи позицію після нього".
+function fillMoveList(items, activeIdx, onPick){
   moveListEl.classList.toggle('is-empty', items.length === 0);
   if(items.length === 0){ moveListEl.textContent = 'Ходів ще не було.'; return; }
   const frag = document.createDocumentFragment();
-  for(let i=0;i<items.length;i+=2){
-    const pair = document.createElement('span');
-    pair.className = 'mv-pair';
-    const no = document.createElement('span');
-    no.className = 'mv-no';
-    no.textContent = items[i].no + '.';
-    pair.appendChild(no);
-    for(let j=i;j<Math.min(i+2, items.length);j++){
-      const mv = document.createElement('span');
-      mv.className = 'mv' + (j === activeIdx ? ' is-last' : '');
-      mv.textContent = items[j].san;
-      pair.appendChild(mv);
+  let pair = null;
+  items.forEach((it, i)=>{
+    const isWhite = it.color ? it.color === 'w' : i % 2 === 0;
+    if(!pair || isWhite){
+      pair = document.createElement('span');
+      pair.className = 'mv-pair';
+      const no = document.createElement('span');
+      no.className = 'mv-no';
+      no.textContent = it.no + (isWhite ? '.' : '…');
+      pair.appendChild(no);
+      frag.appendChild(pair);
     }
-    frag.appendChild(pair);
-  }
+    const mv = document.createElement(onPick ? 'button' : 'span');
+    mv.className = 'mv' + (i === activeIdx ? ' is-current' : '');
+    mv.textContent = it.san;
+    if(onPick){
+      mv.type = 'button';
+      mv.setAttribute('aria-label', 'Хід ' + it.no + (isWhite ? '.' : '…') + ' ' + it.san + ': показати позицію після нього');
+      if(i === activeIdx) mv.setAttribute('aria-current', 'true');
+      mv.addEventListener('click', ()=>{
+        const hadFocus = document.activeElement === mv;
+        onPick(i);
+        if(hadFocus){
+          const cur = moveListEl.querySelector('.mv.is-current');
+          if(cur) cur.focus({preventScroll:true}); // список перемальовується — повертаємо фокус на активний хід
+        }
+      });
+    }
+    pair.appendChild(mv);
+  });
   moveListEl.replaceChildren(frag);
   // Прокручуємо лише сам список (не сторінку), щоб активний хід лишався видимим.
-  const act = moveListEl.querySelector('.is-last');
+  const act = moveListEl.querySelector('.is-current');
   if(act){
     const top = act.offsetTop, bottom = top + act.offsetHeight;
     if(bottom > moveListEl.scrollTop + moveListEl.clientHeight) moveListEl.scrollTop = bottom - moveListEl.clientHeight + 4;
@@ -5333,10 +5481,149 @@ function fillMoveList(items, activeIdx){
   }
 }
 
-function renderMoveList(){
-  const history = chess.history();
-  fillMoveList(history.map((san, i)=>({no: Math.floor(i/2) + 1, san})), history.length - 1);
+function fenFullmove(fen){
+  return parseInt(String(fen).split(' ')[5], 10) || 1;
 }
+
+// Перегляд доступний, коли на дошці "жива" партія (не аналізатор — там своя навігація,
+// не довідник і не автоматичний показ лінії).
+function reviewAvailable(){
+  return !!chess && !isReplaying && currentTab !== 'analyzer' && currentTab !== 'reference';
+}
+
+// FEN усіх позицій живої партії: plyFens[k] — після k напівходів (0 — початкова позиція
+// партії, для задач це їхній FEN). Рахуємо, прокручуючи історію назад і вперед на самій
+// партії: усе синхронно, тож жоден інший код не встигає побачити проміжний стан.
+function rebuildPlyCache(){
+  if(!chess){ plyFens = []; plyMoves = []; plyOwner = null; return; }
+  const moves = chess.history({verbose:true});
+  const fens = [chess.fen()];
+  const undone = [];
+  let m;
+  while((m = chess.undo())){ undone.push(m); fens.push(chess.fen()); }
+  for(let i = undone.length - 1; i >= 0; i--) chess.move(undone[i]);
+  fens.reverse();
+  plyMoves = moves;
+  plyFens = fens;
+  plyOwner = chess;
+}
+
+// "8.Bb5" або "8…Nf6" — підпис ходу за номером напівходу (1 — перший хід партії).
+function plyLabel(p){
+  const mv = plyMoves[p - 1];
+  if(!mv) return '';
+  return fenFullmove(plyFens[p - 1]) + (mv.color === 'w' ? '.' : '…') + mv.san;
+}
+
+function renderMoveList(){
+  rebuildPlyCache();
+  if(reviewPly !== null && (reviewOwner !== chess || reviewPly >= plyFens.length - 1)) reviewPly = null;
+  const items = plyMoves.map((mv, i)=>({no: fenFullmove(plyFens[i]), san: mv.san, color: mv.color}));
+  const activeIdx = reviewPly === null ? items.length - 1 : reviewPly - 1;
+  fillMoveList(items, activeIdx, reviewAvailable() ? (i)=>reviewGoTo(i + 1) : null);
+  syncReviewUI();
+}
+
+// Кнопки й банер перегляду: показуємо, лише коли є що переглядати.
+function syncReviewUI(){
+  const n = (chess && plyOwner === chess) ? plyFens.length - 1 : 0;
+  const show = reviewAvailable() && n > 0;
+  const reviewing = show && reviewPly !== null;
+  reviewNavEl.hidden = !show;
+  reviewBannerEl.hidden = !reviewing;
+  infoColEl.classList.toggle('is-reviewing', reviewing);
+  evalColEl.classList.toggle('is-stale', reviewing); // шкала оцінки рахується для живої позиції
+  boardWrapEl.classList.toggle('is-review', reviewing);
+  if(!show) return;
+  const cur = reviewing ? reviewPly : n;
+  reviewFirstBtn.disabled = reviewPrevBtn.disabled = cur <= 0;
+  reviewNextBtn.disabled = reviewLastBtn.disabled = cur >= n;
+  reviewPosEl.textContent = cur === 0 ? 'Початок' : plyLabel(cur);
+  // Підпис ходу не розриваємо на два рядки: переноситься лише слово "після".
+  if(reviewing && cur > 0){
+    const tok = document.createElement('span');
+    tok.className = 'nowrap';
+    tok.textContent = plyLabel(cur);
+    reviewBannerTextEl.replaceChildren('Перегляд: після ', tok);
+  } else {
+    reviewBannerTextEl.textContent = reviewing ? 'Перегляд: початкова позиція' : '';
+  }
+  // У дебюті з готовими поясненнями показуємо пояснення саме до того ходу, який дивимось.
+  let note = '';
+  if(reviewing && currentTab === 'openings' && currentOpening && currentOpening.moveComments && cur - 1 < currentOpening.moves.length){
+    note = currentOpening.moveComments[cur - 1] || '';
+  }
+  reviewBannerNoteEl.textContent = note;
+  reviewBannerNoteEl.hidden = !note;
+}
+
+// Показує позицію після ply напівходів (Infinity — жива позиція, тобто вихід із перегляду).
+function reviewGoTo(ply){
+  if(!reviewAvailable()) return;
+  if(plyOwner !== chess || plyMoves.length !== chess.history().length) rebuildPlyCache();
+  const last = plyFens.length - 1;
+  if(last <= 0) return;
+  ply = Math.max(0, Math.min(last, ply));
+  if(dragActive){ cleanupDrag(); }
+  selected = null; legalTargets = [];
+  reviewOwner = chess;
+  reviewPly = ply >= last ? null : ply;
+  // Стрілки підказок належать живій позиції — під час перегляду їх ховаємо.
+  hintArrow1El.style.display = 'none';
+  hintArrow2El.style.display = 'none';
+  renderBoard();
+  renderMoveList();
+  if(reviewPly === null) renderHintArrows();
+}
+
+function stepReview(delta){
+  if(!reviewAvailable() || plyOwner !== chess) return;
+  const n = plyFens.length - 1;
+  reviewGoTo((reviewPly === null ? n : reviewPly) + delta);
+}
+
+function exitReview(){
+  if(reviewPly !== null) reviewGoTo(Infinity);
+}
+
+// Спроба ходити під час перегляду: дошка лише для читання — м'яко натякаємо на "До гри".
+function nudgeReview(){
+  reviewBannerEl.classList.remove('nudge');
+  void reviewBannerEl.offsetWidth;
+  reviewBannerEl.classList.add('nudge');
+}
+
+reviewFirstBtn.addEventListener('click', ()=>reviewGoTo(0));
+reviewPrevBtn.addEventListener('click', ()=>stepReview(-1));
+reviewNextBtn.addEventListener('click', ()=>stepReview(1));
+reviewLastBtn.addEventListener('click', ()=>reviewGoTo(Infinity));
+reviewLiveBtn.addEventListener('click', ()=>reviewGoTo(Infinity));
+
+principleMoveStripEl.addEventListener('click', (e)=>{
+  const chip = e.target.closest ? e.target.closest('.move-chip[data-ply]') : null;
+  if(chip) reviewGoTo(+chip.dataset.ply);
+});
+principleMoveStripEl.addEventListener('keydown', (e)=>{
+  if(e.key !== 'Enter' && e.key !== ' ') return;
+  const chip = e.target.closest ? e.target.closest('.move-chip[data-ply]') : null;
+  if(!chip) return;
+  e.preventDefault();
+  reviewGoTo(+chip.dataset.ply);
+});
+
+// Стрілки ←/→ гортають ходи. Коли фокус на самій дошці, звичайні стрілки рухають
+// клавіатурний фокус по клітинках — там перегляд ходів іде через Shift+стрілки.
+document.addEventListener('keydown', (e)=>{
+  if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  const tag = e.target && e.target.tagName;
+  if(tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+  if(!reviewAvailable() || plyOwner !== chess || plyFens.length < 2) return;
+  const onBoard = e.target && e.target.closest && e.target.closest('#board');
+  if(onBoard && !e.shiftKey) return;
+  e.preventDefault();
+  stepReview(e.key === 'ArrowLeft' ? -1 : 1);
+});
 
 function setStatus(msg, kind){
   statusEl.textContent = msg;
@@ -5357,6 +5644,7 @@ function setStatus(msg, kind){
 // значення просто ігнорує.
 function activateSquare(squareName){
   if(isReplaying) return 'blocked';
+  if(reviewPly !== null){ nudgeReview(); return 'blocked'; } // під час перегляду ходити не можна — спершу «До гри»
   if(currentTab === 'reference') return 'blocked'; // дошка в довіднику — лише для перегляду партії, без ручних ходів
   if(currentTab === 'analyzer' && chess.game_over()) return 'blocked'; // партія на дошці аналізатора скінчилась — нема чим ходити
   if(currentTab === 'tactics' && puzzleSolved) return 'blocked';
@@ -5503,6 +5791,7 @@ function moveKeyboardFocus(dCol, dRow){
 boardEl.addEventListener('keydown', (e)=>{
   const sqEl = e.target.closest('.sq');
   if(!sqEl) return;
+  if(e.shiftKey && e.key.indexOf('Arrow') === 0) return; // Shift+стрілки — перегляд ходів (див. reviewGoTo)
   if(e.key === 'ArrowUp'){ e.preventDefault(); moveKeyboardFocus(0, 1); }
   else if(e.key === 'ArrowDown'){ e.preventDefault(); moveKeyboardFocus(0, -1); }
   else if(e.key === 'ArrowLeft'){ e.preventDefault(); moveKeyboardFocus(-1, 0); }
@@ -5977,7 +6266,7 @@ function setArrow(lineEl, uciMove, headLen){
 }
 
 function renderHintArrows(){
-  if(currentTab !== 'bot' || !botHintsOn){
+  if(reviewPly !== null || currentTab !== 'bot' || !botHintsOn){
     hintArrow1El.style.display = 'none';
     hintArrow2El.style.display = 'none';
     return;
@@ -6876,7 +7165,7 @@ function renderAnalyzerMoveListText(){
   const plies = analyzerGame.plies;
   // Виділяємо хід, після якого зараз стоїть дошка (або місце, звідки відгалужено варіант).
   const activeIdx = (analyzerBranch ? analyzerBranch.fromPly : analyzerPly) - 1;
-  fillMoveList(plies.map(p=>({no: p.moveNo, san: p.san})), activeIdx);
+  fillMoveList(plies.map(p=>({no: p.moveNo, san: p.san, color: p.color})), activeIdx, (i)=>analyzerGoTo(i + 1));
 }
 
 function renderAnalyzerView(){
