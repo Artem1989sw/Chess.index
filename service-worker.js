@@ -2,7 +2,7 @@
    Бампни CACHE_VERSION при кожному деплої, що міняє будь-який із перелічених файлів —
    activate() сам прибере старі версії кешу, тож відвідувачі не застрягнуть на застарілій
    копії назавжди (класична проблема "зламаного" service worker-а). */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 const CACHE_NAME = 'chess-trainer-' + CACHE_VERSION;
 
 // "Оболонка" застосунку — усе, без чого сайт не запрацює взагалі: HTML, шрифти,
@@ -13,8 +13,8 @@ const PRECACHE_URLS = [
   'manifest.json',
   'vendor/fonts.css',
   'vendor/chess.min.js',
-  'vendor/stockfish-17.1-lite-single-03e3232.js',
-  'vendor/stockfish-17.1-lite-single-03e3232.wasm',
+  'vendor/stockfish-19-lite-single.js',
+  'vendor/stockfish-19-lite-single.wasm',
   'vendor/fonts/fraunces-latin.woff2',
   'vendor/fonts/inter-cyrillic-ext.woff2',
   'vendor/fonts/inter-cyrillic.woff2',
